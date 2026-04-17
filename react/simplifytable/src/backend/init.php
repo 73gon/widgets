@@ -181,13 +181,19 @@ class Init extends Widget
         $cacheDir = __DIR__ . '/cache';
         $cacheFile = $cacheDir . '/dropdown_options.json';
         $cacheTtl = $this->config['CACHE_TTL'];
+        $cacheSignature = $this->buildDropdownOptionsCacheSignature();
 
         if (file_exists($cacheFile)) {
             $age = time() - filemtime($cacheFile);
             if ($age < $cacheTtl) {
                 $cached = json_decode(file_get_contents($cacheFile), true);
-                if (is_array($cached)) {
-                    return $cached;
+                if (
+                    is_array($cached)
+                    && ($cached['signature'] ?? null) === $cacheSignature
+                    && isset($cached['options'])
+                    && is_array($cached['options'])
+                ) {
+                    return $cached['options'];
                     }
                 }
             }
@@ -197,9 +203,21 @@ class Init extends Widget
         if (!is_dir($cacheDir)) {
             @mkdir($cacheDir, 0755, true);
             }
-        @file_put_contents($cacheFile, json_encode($options));
+        @file_put_contents($cacheFile, json_encode([
+            'signature' => $cacheSignature,
+            'options' => $options,
+        ]));
 
         return $options;
+        }
+
+    private function buildDropdownOptionsCacheSignature(): string
+        {
+        return md5(json_encode([
+            'dataView' => $this->config['DATA_VIEW'] ?? null,
+            'dropdownSources' => $this->config['DROPDOWN_SOURCES'] ?? [],
+            'staticDropdowns' => $this->config['STATIC_DROPDOWNS'] ?? [],
+        ]));
         }
 
     /**
@@ -245,10 +263,7 @@ class Init extends Widget
         $dbHelper = $this->getDbHelper();
         $tableName = $this->config['PREFERENCES_TABLE'];
 
-        if (!$dbHelper->tableExists($tableName)) {
-            $createQuery = $dbHelper->createPreferencesTableSQL($tableName);
-            $this->getJobDB()->exec($createQuery);
-            }
+        $dbHelper->ensurePreferencesTableSchema($tableName);
         }
 
     /**

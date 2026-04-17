@@ -322,8 +322,8 @@ function AutocompleteFilter({ config }: AutocompleteFilterProps) {
     <div className='space-y-1.5'>
       <label className='text-xs font-medium text-muted-foreground uppercase tracking-wide'>{config.label}</label>
       <Popover open={open} onOpenChange={handleOpenChange}>
-        <PopoverTrigger className='min-h-7 w-full rounded-md border border-input bg-input/20 px-2 py-1 text-xs ring-offset-background cursor-pointer flex gap-1 items-center text-left min-w-0'>
-          <div className='flex gap-1 items-center flex-1 flex-wrap'>
+        <PopoverTrigger className='min-h-7 w-full rounded-md border border-input bg-input/20 px-2 py-1 text-xs ring-offset-background cursor-pointer flex gap-1 items-start text-left min-w-0'>
+          <div className='flex max-h-16 flex-1 flex-wrap content-start items-start gap-1 overflow-y-auto pr-1 scrollbar-thumb-[#FFCC00] scrollbar-track-transparent'>
             {selectedValues.map((val) => (
               <Badge key={val} variant='secondary' className='gap-1 bg-muted text-muted-foreground h-4.5 shrink-0'>
                 <span className='max-w-25 truncate text-2xs'>{getLabel(val)}</span>

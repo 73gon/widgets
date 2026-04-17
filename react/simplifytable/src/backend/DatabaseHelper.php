@@ -182,6 +182,94 @@ class DatabaseHelper
     }
 
   /**
+   * Check whether a column exists in a table.
+   *
+   * @param string $tableName
+   * @param string $columnName
+   * @return bool
+   */
+  public function columnExists(string $tableName, string $columnName): bool
+    {
+    try {
+      if ($this->isMysql()) {
+        $query = "SHOW COLUMNS FROM {$tableName} LIKE '{$columnName}'";
+        $result = $this->jobDB->query($query);
+        $row = $this->jobDB->fetchRow($result);
+        return !empty($row);
+        }
+
+      $query = "SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '{$tableName}' AND COLUMN_NAME = '{$columnName}'";
+      $result = $this->jobDB->query($query);
+      $row = $this->jobDB->fetchRow($result);
+      return !empty($row);
+      } catch (\Exception $e) {
+      return false;
+      }
+    }
+
+  /**
+   * Ensure the preferences table exists and contains all currently required columns.
+   * This keeps older widget installations compatible when new preference fields are added.
+   *
+   * @param string $tableName
+   * @return void
+   */
+  public function ensurePreferencesTableSchema(string $tableName): void
+    {
+    if (!$this->tableExists($tableName)) {
+      $this->jobDB->exec($this->createPreferencesTableSQL($tableName));
+      return;
+      }
+
+    foreach ($this->getPreferencesMigrationColumns() as $columnName => $columnDefinition) {
+      if (!$this->columnExists($tableName, $columnName)) {
+        $this->jobDB->exec("ALTER TABLE {$tableName} ADD {$columnName} {$columnDefinition}");
+        }
+      }
+    }
+
+  /**
+   * Column definitions used when migrating an existing preferences table.
+   * Keep these nullable so older installations can be upgraded without backfilling data.
+   *
+   * @return array<string, string>
+   */
+  private function getPreferencesMigrationColumns(): array
+    {
+    if ($this->isMysql()) {
+      return [
+        'filter' => 'TEXT NULL',
+        'column_order' => 'TEXT NULL',
+        'sort_column' => 'VARCHAR(100) NULL',
+        'sort_direction' => 'VARCHAR(4) NULL',
+        'current_page' => 'INT NULL',
+        'entries_per_page' => 'INT NULL',
+        'zoom_level' => 'FLOAT NULL',
+        'visible_columns' => 'TEXT NULL',
+        'visible_filters' => 'TEXT NULL',
+        'filter_presets' => 'TEXT NULL',
+        'theme_mode' => 'VARCHAR(10) NULL',
+        'updated_at' => 'TIMESTAMP NULL',
+      ];
+      }
+
+    return [
+      'filter' => 'NVARCHAR(MAX) NULL',
+      'column_order' => 'NVARCHAR(MAX) NULL',
+      'sort_column' => 'NVARCHAR(100) NULL',
+      'sort_direction' => 'NVARCHAR(4) NULL',
+      'current_page' => 'INT NULL',
+      'entries_per_page' => 'INT NULL',
+      'zoom_level' => 'FLOAT NULL',
+      'visible_columns' => 'NVARCHAR(MAX) NULL',
+      'visible_filters' => 'NVARCHAR(MAX) NULL',
+      'filter_presets' => 'NVARCHAR(MAX) NULL',
+      'theme_mode' => 'NVARCHAR(10) NULL',
+      'updated_at' => 'DATETIME NULL',
+    ];
+    }
+
+  /**
    * Generate CREATE TABLE SQL for the user preferences table.
    *
    * @param string $tableName

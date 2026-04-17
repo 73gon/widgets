@@ -59,6 +59,8 @@ class SavePreferences extends Widget
         $dbHelper = $this->getDbHelper();
         $tableName = $this->config['PREFERENCES_TABLE'];
 
+        $dbHelper->ensurePreferencesTableSchema($tableName);
+
         $username = $this->getParam('username', '');
         $filter = $this->getParam('filter', null);
         $columnOrder = $this->getParam('column_order', null);
@@ -72,17 +74,17 @@ class SavePreferences extends Widget
         $filterPresets = $this->getParam('filter_presets', null);
         $themeMode = $this->getParam('theme_mode', null);
 
-        $safeUsername = addslashes($username);
-        $safeFilter = $filter ? $filter : null;
-        $safeColumnOrder = $columnOrder ? $columnOrder : null;
-        $safeSortColumn = $sortColumn ? addslashes($sortColumn) : null;
-        $safeSortDirection = $sortDirection ? addslashes($sortDirection) : null;
-        $safeVisibleColumns = $visibleColumns ? $visibleColumns : null;
-        $safeVisibleFilters = $visibleFilters ? $visibleFilters : null;
-        $safeFilterPresets = $filterPresets ? $filterPresets : null;
-        $safeThemeMode = $themeMode ? addslashes($themeMode) : null;
+        $quotedUsername = $dbHelper->quote($username);
+        $safeFilter = $dbHelper->quoteOrNull($filter ?: null);
+        $safeColumnOrder = $dbHelper->quoteOrNull($columnOrder ?: null);
+        $safeSortColumn = $dbHelper->quoteOrNull($sortColumn ?: null);
+        $safeSortDirection = $dbHelper->quoteOrNull($sortDirection ?: null);
+        $safeVisibleColumns = $dbHelper->quoteOrNull($visibleColumns ?: null);
+        $safeVisibleFilters = $dbHelper->quoteOrNull($visibleFilters ?: null);
+        $safeFilterPresets = $dbHelper->quoteOrNull($filterPresets ?: null);
+        $safeThemeMode = $dbHelper->quoteOrNull($themeMode ?: null);
 
-        $checkQuery = "SELECT id FROM {$tableName} WHERE username = '{$safeUsername}'";
+        $checkQuery = "SELECT id FROM {$tableName} WHERE username = {$quotedUsername}";
         $result = $JobDB->query($checkQuery);
         $exists = $JobDB->fetchRow($result);
 
@@ -91,19 +93,19 @@ class SavePreferences extends Widget
         if ($exists) {
             $updateQuery = "
                 UPDATE {$tableName} SET
-                    filter = " . ($safeFilter ? "'{$safeFilter}'" : "NULL") . ",
-                    column_order = " . ($safeColumnOrder ? "'{$safeColumnOrder}'" : "NULL") . ",
-                    sort_column = " . ($safeSortColumn ? "'{$safeSortColumn}'" : "NULL") . ",
-                    sort_direction = " . ($safeSortDirection ? "'{$safeSortDirection}'" : "NULL") . ",
+                    filter = {$safeFilter},
+                    column_order = {$safeColumnOrder},
+                    sort_column = {$safeSortColumn},
+                    sort_direction = {$safeSortDirection},
                     current_page = {$currentPage},
                     entries_per_page = {$entriesPerPage},
                     zoom_level = {$zoomLevel},
-                    visible_columns = " . ($safeVisibleColumns ? "'{$safeVisibleColumns}'" : "NULL") . ",
-                    visible_filters = " . ($safeVisibleFilters ? "'{$safeVisibleFilters}'" : "NULL") . ",
-                    filter_presets = " . ($safeFilterPresets ? "'{$safeFilterPresets}'" : "NULL") . ",
-                    theme_mode = " . ($safeThemeMode ? "'{$safeThemeMode}'" : "NULL") . ",
+                    visible_columns = {$safeVisibleColumns},
+                    visible_filters = {$safeVisibleFilters},
+                    filter_presets = {$safeFilterPresets},
+                    theme_mode = {$safeThemeMode},
                     updated_at = {$updatedAt}
-                WHERE username = '{$safeUsername}'
+                WHERE username = {$quotedUsername}
             ";
             $JobDB->exec($updateQuery);
             } else {
@@ -111,18 +113,18 @@ class SavePreferences extends Widget
                 INSERT INTO {$tableName}
                 (username, filter, column_order, sort_column, sort_direction, current_page, entries_per_page, zoom_level, visible_columns, visible_filters, filter_presets, theme_mode)
                 VALUES (
-                    '{$safeUsername}',
-                    " . ($safeFilter ? "'{$safeFilter}'" : "NULL") . ",
-                    " . ($safeColumnOrder ? "'{$safeColumnOrder}'" : "NULL") . ",
-                    " . ($safeSortColumn ? "'{$safeSortColumn}'" : "NULL") . ",
-                    " . ($safeSortDirection ? "'{$safeSortDirection}'" : "NULL") . ",
+                    {$quotedUsername},
+                    {$safeFilter},
+                    {$safeColumnOrder},
+                    {$safeSortColumn},
+                    {$safeSortDirection},
                     {$currentPage},
                     {$entriesPerPage},
                     {$zoomLevel},
-                    " . ($safeVisibleColumns ? "'{$safeVisibleColumns}'" : "NULL") . ",
-                    " . ($safeVisibleFilters ? "'{$safeVisibleFilters}'" : "NULL") . ",
-                    " . ($safeFilterPresets ? "'{$safeFilterPresets}'" : "NULL") . ",
-                    " . ($safeThemeMode ? "'{$safeThemeMode}'" : "NULL") . "
+                    {$safeVisibleColumns},
+                    {$safeVisibleFilters},
+                    {$safeFilterPresets},
+                    {$safeThemeMode}
                 )
             ";
             $JobDB->exec($insertQuery);

@@ -22,8 +22,8 @@ import type { TableRow as TableRowType, Column, RowAction } from '@/lib/types';
 
 export function DataTable() {
   const { state, columns, setSort, setColumnOrder, loadData } = useSimplifyTable();
-  const [draggedColumn, setDraggedColumn] = useState<number | null>(null);
-  const [dragOverColumn, setDragOverColumn] = useState<number | null>(null);
+  const [draggedColumnId, setDraggedColumnId] = useState<string | null>(null);
+  const [dragOverColumnId, setDragOverColumnId] = useState<string | null>(null);
   const [rowHeight, setRowHeight] = useState<number | null>(null);
   const bodyContainerRef = useRef<HTMLDivElement | null>(null);
   const headerRowRef = useRef<HTMLTableRowElement | null>(null);
@@ -68,47 +68,49 @@ export function DataTable() {
   };
 
   // Drag and drop handlers
-  const handleDragStart = useCallback((e: React.DragEvent, index: number) => {
-    if (index === 0) {
+  const handleDragStart = useCallback((e: React.DragEvent, columnId: string) => {
+    if (columnId === 'actions') {
       e.preventDefault();
       return;
     }
-    setDraggedColumn(index);
+    setDraggedColumnId(columnId);
     e.dataTransfer.effectAllowed = 'move';
   }, []);
 
   const handleDragOver = useCallback(
-    (e: React.DragEvent, index: number) => {
+    (e: React.DragEvent, columnId: string) => {
       e.preventDefault();
-      if (index === 0 || draggedColumn === null) return;
-      setDragOverColumn(index);
+      if (columnId === 'actions' || draggedColumnId === null) return;
+      setDragOverColumnId(columnId);
     },
-    [draggedColumn],
+    [draggedColumnId],
   );
 
   const handleDragLeave = useCallback(() => {
-    setDragOverColumn(null);
+    setDragOverColumnId(null);
   }, []);
 
   const handleDrop = useCallback(
-    (e: React.DragEvent, targetIndex: number) => {
+    (e: React.DragEvent, targetColumnId: string) => {
       e.preventDefault();
-      if (draggedColumn === null || targetIndex === 0 || draggedColumn === 0) return;
+      if (!draggedColumnId || targetColumnId === 'actions' || draggedColumnId === targetColumnId) return;
 
-      const newOrder = [...state.columnOrder];
-      const [moved] = newOrder.splice(draggedColumn, 1);
-      newOrder.splice(targetIndex, 0, moved);
+      const newOrder = state.columnOrder.filter((columnId) => columnId !== draggedColumnId);
+      const targetIndex = newOrder.indexOf(targetColumnId);
+      if (targetIndex === -1) return;
+
+      newOrder.splice(targetIndex, 0, draggedColumnId);
       setColumnOrder(newOrder);
 
-      setDraggedColumn(null);
-      setDragOverColumn(null);
+      setDraggedColumnId(null);
+      setDragOverColumnId(null);
     },
-    [draggedColumn, state.columnOrder, setColumnOrder],
+    [draggedColumnId, state.columnOrder, setColumnOrder],
   );
 
   const handleDragEnd = useCallback(() => {
-    setDraggedColumn(null);
-    setDragOverColumn(null);
+    setDraggedColumnId(null);
+    setDragOverColumnId(null);
   }, []);
 
   if (!state.isDataLoaded && !state.loading) {
@@ -151,22 +153,22 @@ export function DataTable() {
       <Table className='border-separate border-spacing-0 min-w-max'>
         <TableHeader className='bg-card sticky top-0 z-10'>
           <TableRow ref={headerRowRef} className='hover:bg-transparent'>
-            {visibleColumns.map((column, index) => (
+            {visibleColumns.map((column) => (
               <TableHead
                 key={column.id}
                 className={`
                   bg-card shadow-[0_1px_0_0_rgba(0,0,0,0.1)]
                   whitespace-nowrap select-none
                   ${column.id !== 'actions' ? 'cursor-pointer hover:bg-muted/50' : ''}
-                  ${draggedColumn === index ? 'opacity-50' : ''}
-                  ${dragOverColumn === index ? 'border-l-2 border-primary' : ''}
+                  ${draggedColumnId === column.id ? 'opacity-50' : ''}
+                  ${dragOverColumnId === column.id ? 'border-l-2 border-primary' : ''}
                 `}
                 style={{ textAlign: column.align }}
                 draggable={column.id !== 'actions'}
-                onDragStart={(e) => handleDragStart(e, index)}
-                onDragOver={(e) => handleDragOver(e, index)}
+                onDragStart={(e) => handleDragStart(e, column.id)}
+                onDragOver={(e) => handleDragOver(e, column.id)}
                 onDragLeave={handleDragLeave}
-                onDrop={(e) => handleDrop(e, index)}
+                onDrop={(e) => handleDrop(e, column.id)}
                 onDragEnd={handleDragEnd}
                 onClick={() => handleSort(column.id)}
               >
@@ -348,6 +350,19 @@ function resolveUrlTemplate(template: string, row: TableRowType): string {
   });
 }
 
+function getActionTooltipValue(actionId: string, row: TableRowType, dataKey: string): string {
+  if (actionId === 'history') {
+    return '';
+  }
+
+  if ((actionId === 'invoice' || actionId === 'protocol') && row.documentId != null) {
+    return String(row.documentId);
+  }
+
+  const raw = row[dataKey];
+  return raw != null ? String(raw) : '';
+}
+
 function evaluateCondition(condition: string | undefined, row: TableRowType): boolean {
   if (!condition) return true;
   // Simple condition format: "field=value" or "status=beendet"
@@ -391,6 +406,7 @@ function ActionButton({ action, row }: ActionButtonProps) {
   const isEnabled = hasData && conditionMet;
 
   const resolvedUrl = isEnabled ? resolveUrlTemplate(action.urlTemplate, row) : '';
+  const tooltipValue = getActionTooltipValue(action.id, row, dataKey);
 
   const handleClick = (e: React.MouseEvent) => {
     if (!isEnabled || !resolvedUrl) return;
@@ -405,7 +421,9 @@ function ActionButton({ action, row }: ActionButtonProps) {
   };
 
   const tooltipText = isEnabled
-    ? `${action.label}: ${row[dataKey] ?? ''}`
+    ? tooltipValue
+      ? `${action.label}: ${tooltipValue}`
+      : action.label
     : !conditionMet
       ? `${action.label} nicht verfügbar (Bedingung nicht erfüllt)`
       : `Kein(e) ${action.label} verfügbar`;
