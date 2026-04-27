@@ -56,7 +56,7 @@ $CONFIG['BASE_URL'] = 'https://jobrouter.example.com/jobrouter';
 
 /** Passphrase used to generate MD5 tracking keys. Replace per customer. */
 $CONFIG['TRACKING_PASSPHRASE'] = 'change-me-per-customer';
- 
+
 // =============================================================================
 // 3. THEME
 // =============================================================================

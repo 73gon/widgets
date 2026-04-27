@@ -30,18 +30,18 @@ block is described below in the order it appears in the file.
 
 ### 1. Database
 
-| Key                 | Purpose                                                            |
-| ------------------- | ------------------------------------------------------------------ |
-| `DB_TYPE`           | `'mssql'`, `'mysql'`, or `'auto'` (auto-detect from JobRouter).    |
-| `DATA_VIEW`         | Main SQL view / table queried by the widget.                       |
-| `PREFERENCES_TABLE` | Table that stores per-user preferences. Auto-created on first run. |
-| `AUTH_COLUMN`       | Column holding the comma-separated access list used to filter rows.|
+| Key                 | Purpose                                                             |
+| ------------------- | ------------------------------------------------------------------- |
+| `DB_TYPE`           | `'mssql'`, `'mysql'`, or `'auto'` (auto-detect from JobRouter).     |
+| `DATA_VIEW`         | Main SQL view / table queried by the widget.                        |
+| `PREFERENCES_TABLE` | Table that stores per-user preferences. Auto-created on first run.  |
+| `AUTH_COLUMN`       | Column holding the comma-separated access list used to filter rows. |
 
 ### 2. URLs & Secrets
 
-| Key                   | Purpose                                                       |
-| --------------------- | ------------------------------------------------------------- |
-| `BASE_URL`            | Base URL of the customer's JobRouter (no trailing slash).     |
+| Key                   | Purpose                                                          |
+| --------------------- | ---------------------------------------------------------------- |
+| `BASE_URL`            | Base URL of the customer's JobRouter (no trailing slash).        |
 | `TRACKING_PASSPHRASE` | Secret used to generate the MD5 tracking key for incident links. |
 
 ### 3. Theme
@@ -203,6 +203,7 @@ npm run build
 
 Output lands in `dist/`. Copy `dist/` plus the `src/backend/` folder to the
 JobRouter widget directory (or use the release zip workflow above).
+
 # React + TypeScript + Vite + shadcn/ui
 
 This is a template for a new Vite project with React, TypeScript, and shadcn/ui.

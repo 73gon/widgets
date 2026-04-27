@@ -431,12 +431,7 @@ function AutocompleteFilter({ config }: AutocompleteFilterProps) {
                           const m = markers.find((x) => x.id === mid);
                           if (!m) return null;
                           return (
-                            <span
-                              key={mid}
-                              className='inline-block h-2 w-2 rounded-full'
-                              style={{ backgroundColor: m.color }}
-                              aria-label={m.label}
-                            />
+                            <span key={mid} className='inline-block h-2 w-2 rounded-full' style={{ backgroundColor: m.color }} aria-label={m.label} />
                           );
                         })}
                       </span>
