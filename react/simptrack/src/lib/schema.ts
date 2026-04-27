@@ -1,4 +1,4 @@
-import type { Column, DropdownOption, FilterConfig, Filters, OptionMarkerMeta, ServerColumn, ServerStandaloneFilter } from './types';
+import type { Column, DropdownOption, FilterConfig, Filters, ServerColumn, ServerStandaloneFilter, SpvFilterMeta } from './types';
 
 // ============================================
 // SCHEMA DERIVATION
@@ -11,7 +11,7 @@ export interface ServerSchema {
   columns: ServerColumn[];
   standaloneFilters: ServerStandaloneFilter[];
   dropdownOptions: Record<string, DropdownOption[]>;
-  optionMarkers?: Record<string, OptionMarkerMeta[]>;
+  spvFilter?: SpvFilterMeta | null;
 }
 
 /** Plain Column[] for DEFAULT_COLUMNS-equivalent usage. */
@@ -54,11 +54,11 @@ export function filterConfigsFromServer(schema: ServerSchema): FilterConfig[] {
   for (const col of schema.columns) {
     const f = col.filter;
     if (!f) continue;
-    out.push(buildFilterConfig(f.id ?? f.key, f.label ?? col.label, f, schema.dropdownOptions, schema.optionMarkers));
+    out.push(buildFilterConfig(f.id ?? f.key, f.label ?? col.label, f, schema.dropdownOptions, schema.spvFilter));
   }
 
   for (const f of schema.standaloneFilters) {
-    out.push(buildFilterConfig(f.id ?? f.key, f.label ?? '', f, schema.dropdownOptions, schema.optionMarkers));
+    out.push(buildFilterConfig(f.id ?? f.key, f.label ?? '', f, schema.dropdownOptions, schema.spvFilter));
   }
 
   return out;
@@ -69,7 +69,7 @@ function buildFilterConfig(
   label: string,
   f: { type: FilterConfig['type']; key: string; optionsKey?: string; rangeIds?: { fromId: string; toId: string } },
   dropdowns: Record<string, DropdownOption[]>,
-  optionMarkers?: Record<string, OptionMarkerMeta[]>,
+  spvFilter?: SpvFilterMeta | null,
 ): FilterConfig {
   const config: FilterConfig = {
     id,
@@ -81,11 +81,8 @@ function buildFilterConfig(
   if (f.type === 'dropdown' || f.type === 'autocomplete') {
     const optionsKey = f.optionsKey ?? f.key;
     config.options = dropdowns[optionsKey] ?? [];
-    if (optionMarkers && f.type === 'autocomplete') {
-      const markers = optionMarkers[optionsKey];
-      if (markers && markers.length > 0) {
-        config.markers = markers;
-      }
+    if (spvFilter && f.type === 'autocomplete' && spvFilter.optionsKey === optionsKey) {
+      config.marker = { label: spvFilter.label, color: spvFilter.color };
     }
   } else if (f.rangeIds) {
     config.options = f.rangeIds;

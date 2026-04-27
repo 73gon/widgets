@@ -13,13 +13,13 @@ export interface Column {
 export interface DropdownOption {
   id: string;
   label: string;
-  /** Marker ids (from OPTION_MARKERS) that match this option. */
-  markers?: string[];
+  /** Optional marker flag set by the backend (e.g. SPV companies). */
+  marked?: boolean;
 }
 
-/** Metadata for a marker badge attached to an autocomplete filter. */
-export interface OptionMarkerMeta {
-  id: string;
+/** Metadata for a marker badge attached to an autocomplete filter (e.g. SPV). */
+export interface SpvFilterMeta {
+  optionsKey: string;
   label: string;
   color: string;
 }
@@ -49,8 +49,8 @@ export interface FilterConfig {
   filterKey: string;
   options?: DropdownOption[] | { fromId: string; toId: string };
   visible?: boolean;
-  /** Marker badge metadata for autocomplete filters with tagged option subsets. */
-  markers?: OptionMarkerMeta[];
+  /** Marker badge metadata when this autocomplete has a flagged subset (e.g. SPV). */
+  marker?: { label: string; color: string };
 }
 
 export interface AppError {

@@ -255,7 +255,7 @@ export function SimplifyTableProvider({ children }: SimplifyTableProviderProps) 
           columns?: ServerColumn[];
           standaloneFilters?: ServerStandaloneFilter[];
           dropdownOptions?: Record<string, import('./types').DropdownOption[]>;
-          optionMarkers?: Record<string, import('./types').OptionMarkerMeta[]>;
+          spvFilter?: import('./types').SpvFilterMeta | null;
           userPreferences?: import('./types').UserPreferences | null;
           rowActions?: RowAction[];
           theme?: { defaultMode?: 'light' | 'dark' };
@@ -271,7 +271,7 @@ export function SimplifyTableProvider({ children }: SimplifyTableProviderProps) 
           columns: serverColumns,
           standaloneFilters: serverStandalone,
           dropdownOptions: serverDropdowns,
-          optionMarkers: initResponse.optionMarkers ?? {},
+          spvFilter: initResponse.spvFilter ?? null,
         };
 
         const preferences = initResponse.userPreferences ?? null;

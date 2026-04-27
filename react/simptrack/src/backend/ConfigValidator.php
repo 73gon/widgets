@@ -1,7 +1,7 @@
 <?php
 /**
  * =============================================================================
- * ConfigValidator — Fail-fast schema validation for SimplifyTable config
+ * ConfigValidator — Fail-fast schema validation for Simptrack config
  * =============================================================================
  *
  * Runs at the top of every init.php / query.php request. When it detects an
@@ -63,7 +63,7 @@ class ConfigValidator
     $this->validateFilters();
     $this->validateRowActions();
     $this->validateSpecialFilters();
-    $this->validateOptionMarkers();
+    $this->validateSpvFilter();
     if ($this->jobDB !== null)
       $this->validateDbColumns();
     }
@@ -162,52 +162,37 @@ class ConfigValidator
     }
 
   // --------------------------------------------------------------------------
-  // R6: OPTION_MARKERS (optional) — each entry must declare id/optionsKey/
-  //     column/value and reference a known DROPDOWN_SOURCES entry.
+  // R6: SPV_FILTER (optional) must reference a known DROPDOWN_SOURCES entry
+  //     and declare the marker column + value used for tagging options.
   // --------------------------------------------------------------------------
-  private function validateOptionMarkers(): void
+  private function validateSpvFilter(): void
     {
-    $markers = $this->config['OPTION_MARKERS'] ?? [];
-    if (empty($markers))
+    $spv = $this->config['SPV_FILTER'] ?? null;
+    if (empty($spv))
       return;
 
+    foreach (['optionsKey', 'column', 'value'] as $required) {
+      if (!array_key_exists($required, $spv) || $spv[$required] === '' || $spv[$required] === null) {
+        throw new ConfigValidationException(
+          'R6',
+          "SPV_FILTER is missing required key '{$required}'.",
+          ['hint' => "Set SPV_FILTER['{$required}'] in config.php, or remove SPV_FILTER entirely to disable."]
+        );
+        }
+      }
+
     $sources = $this->config['DROPDOWN_SOURCES'] ?? [];
-    $seenIds = [];
-
-    foreach ($markers as $idx => $m) {
-      foreach (['id', 'optionsKey', 'column', 'value'] as $required) {
-        if (!array_key_exists($required, $m) || $m[$required] === '' || $m[$required] === null) {
-          throw new ConfigValidationException(
-            'R6',
-            "OPTION_MARKERS[{$idx}] is missing required key '{$required}'.",
-            ['index' => $idx, 'hint' => "Set OPTION_MARKERS[{$idx}]['{$required}'] in config.php, or remove the entry."]
-          );
-          }
-        }
-
-      $id = $m['id'];
-      if (in_array($id, $seenIds, true)) {
-        throw new ConfigValidationException(
-          'R6',
-          "OPTION_MARKERS contains duplicate id '{$id}'.",
-          ['id' => $id, 'hint' => 'Each OPTION_MARKERS entry needs a unique id.']
-        );
-        }
-      $seenIds[] = $id;
-
-      $optionsKey = $m['optionsKey'];
-      if (!isset($sources[$optionsKey])) {
-        throw new ConfigValidationException(
-          'R6',
-          "OPTION_MARKERS[{$idx}].optionsKey '{$optionsKey}' is not a DROPDOWN_SOURCES entry.",
-          [
-            'index' => $idx,
-            'optionsKey' => $optionsKey,
-            'availableSources' => array_keys($sources),
-            'hint' => 'OPTION_MARKERS only work on DB-queried dropdowns (DROPDOWN_SOURCES), not STATIC_DROPDOWNS.',
-          ]
-        );
-        }
+    $optionsKey = $spv['optionsKey'];
+    if (!isset($sources[$optionsKey])) {
+      throw new ConfigValidationException(
+        'R6',
+        "SPV_FILTER.optionsKey '{$optionsKey}' is not a DROPDOWN_SOURCES entry.",
+        [
+          'optionsKey' => $optionsKey,
+          'availableSources' => array_keys($sources),
+          'hint' => 'SPV marking only works on DB-queried dropdowns (DROPDOWN_SOURCES), not STATIC_DROPDOWNS.',
+        ]
+      );
       }
     }
 

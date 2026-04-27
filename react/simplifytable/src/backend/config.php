@@ -315,21 +315,6 @@ $CONFIG['FIELD_MAP'] = [
       'optionsKey' => 'kostenuebernahme',
     ],
   ],
-  [
-    'id' => 'coorspvflag',
-    'label' => 'Coor SPV',
-    'type' => 'text',
-    'align' => 'center',
-    'dbColumn' => 'coorspvflag',
-    'filter' => [
-      'type' => 'dropdown',
-      'key' => 'coorspvflag',
-      'dbColumn' => 'coorspvflag',
-      'dbType' => 'boolean_10',
-      'defaultValue' => 'all',
-      'optionsKey' => 'coorspvflag',
-    ],
-  ],
 ];
 
 // =============================================================================
@@ -409,6 +394,42 @@ $CONFIG['DROPDOWN_SOURCES'] = [
 ];
 
 // =============================================================================
+// 6b. OPTION MARKERS (per-option tags on autocomplete dropdowns)
+// =============================================================================
+// Flags subsets of options inside a DROPDOWN_SOURCES entry so the frontend can
+// render a colored dot per marked option and a one-click select-all badge.
+// Multiple markers may target the same optionsKey (e.g. SPVs + Konzern).
+//
+// Each entry:
+//   id         — unique identifier (also used as marker tag on options)
+//   optionsKey — DROPDOWN_SOURCES key whose options should be marked
+//   column     — additional column on that source table read for marking
+//   value      — string OR array of strings; option is marked when column matches
+//   label      — text shown on the toggle badge in the UI
+//   color      — CSS color used for the badge background and the dot
+//
+// Remove the array (or leave it empty) to disable markers entirely.
+
+$CONFIG['OPTION_MARKERS'] = [
+  [
+    'id' => 'spv',
+    'optionsKey' => 'gesellschaft',
+    'column' => 'ROLLE',
+    'value' => '0000',
+    'label' => 'SPVs',
+    'color' => '#14b8a6',
+  ],
+  [
+    'id' => 'konzern',
+    'optionsKey' => 'gesellschaft',
+    'column' => 'ROLLE',
+    'value' => ['0001', '0002', '0003', '0004', '0007', '0011', '0015'],
+    'label' => 'Konzerngesellschaften',
+    'color' => '#a855f7',
+  ],
+];
+
+// =============================================================================
 // 7. STATIC DROPDOWNS (hardcoded)
 // =============================================================================
 
@@ -434,10 +455,6 @@ $CONFIG['STATIC_DROPDOWNS'] = [
     ['id' => 'Nein', 'label' => 'Nein'],
   ],
   'kostenuebernahme' => [
-    ['id' => 'Ja', 'label' => 'Ja'],
-    ['id' => 'Nein', 'label' => 'Nein'],
-  ],
-  'coorspvflag' => [
     ['id' => 'Ja', 'label' => 'Ja'],
     ['id' => 'Nein', 'label' => 'Nein'],
   ],

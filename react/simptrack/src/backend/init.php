@@ -1,6 +1,6 @@
 <?php
 
-namespace dashboard\MyWidgets\SimplifyTable;
+namespace dashboard\MyWidgets\Simptrack;
 
 use JobRouter\Api\Dashboard\v1\Widget;
 use Exception;
@@ -24,7 +24,7 @@ class Init extends Widget
 
     public function getTitle(): string
         {
-        return 'SimplifyTable Init';
+        return 'Simptrack Init';
         }
 
     public static function execute(): void
@@ -105,7 +105,7 @@ class Init extends Widget
             'columns' => $this->getColumns(),
             'standaloneFilters' => $this->getStandaloneFilters(),
             'dropdownOptions' => $this->getDropdownOptions(),
-            'optionMarkers' => $this->getOptionMarkersMeta(),
+            'spvFilter' => $this->getSpvFilterMeta(),
             'userPreferences' => $this->loadUserPreferences($username),
             'rowActions' => $rowActions,
             'theme' => $this->config['THEME'],
@@ -218,28 +218,21 @@ class Init extends Widget
             'dataView' => $this->config['DATA_VIEW'] ?? null,
             'dropdownSources' => $this->config['DROPDOWN_SOURCES'] ?? [],
             'staticDropdowns' => $this->config['STATIC_DROPDOWNS'] ?? [],
-            'optionMarkers' => $this->config['OPTION_MARKERS'] ?? [],
+            'spvFilter' => $this->config['SPV_FILTER'] ?? null,
         ]));
         }
 
-    /** Frontend metadata for option-marker badges, keyed by optionsKey. */
-    private function getOptionMarkersMeta(): array
+    /** Frontend metadata for the SPV badge in the matching autocomplete filter. */
+    private function getSpvFilterMeta(): ?array
         {
-        $markers = $this->config['OPTION_MARKERS'] ?? [];
-        $out = [];
-        foreach ($markers as $m) {
-            if (empty($m['id']) || empty($m['optionsKey']))
-                continue;
-            $optionsKey = $m['optionsKey'];
-            if (!isset($out[$optionsKey]))
-                $out[$optionsKey] = [];
-            $out[$optionsKey][] = [
-                'id' => $m['id'],
-                'label' => $m['label'] ?? $m['id'],
-                'color' => $m['color'] ?? '#14b8a6',
-            ];
-            }
-        return $out;
+        $spv = $this->config['SPV_FILTER'] ?? null;
+        if (empty($spv) || empty($spv['optionsKey']))
+            return null;
+        return [
+            'optionsKey' => $spv['optionsKey'],
+            'label' => $spv['label'] ?? 'SPV',
+            'color' => $spv['color'] ?? '#14b8a6',
+        ];
         }
 
     /**
@@ -252,13 +245,10 @@ class Init extends Widget
         $dataView = $this->config['DATA_VIEW'];
         $options = [];
 
-        // Group OPTION_MARKERS by optionsKey for efficient per-source lookup.
-        $markersByKey = [];
-        foreach (($this->config['OPTION_MARKERS'] ?? []) as $m) {
-            if (empty($m['id']) || empty($m['optionsKey']) || empty($m['column']) || !isset($m['value']))
-                continue;
-            $markersByKey[$m['optionsKey']][] = $m;
-            }
+        $spv = $this->config['SPV_FILTER'] ?? null;
+        $spvOptionsKey = $spv['optionsKey'] ?? null;
+        $spvColumn = $spv['column'] ?? null;
+        $spvValue = isset($spv['value']) ? (string) $spv['value'] : null;
 
         // DB-queried dropdowns from config
         foreach ($this->config['DROPDOWN_SOURCES'] as $key => $source) {
@@ -268,37 +258,22 @@ class Init extends Widget
             $distinct = !empty($source['distinct']) ? 'DISTINCT' : '';
             $orderBy = !empty($source['orderBy']) ? "ORDER BY {$source['orderBy']}" : '';
 
-            $sourceMarkers = $markersByKey[$key] ?? [];
-            // Collect distinct marker columns to add to the SELECT.
-            $extraCols = [];
-            foreach ($sourceMarkers as $m) {
-                $col = $m['column'];
-                if (!in_array($col, $extraCols, true))
-                    $extraCols[] = $col;
-                }
+            $isSpvSource = ($spvOptionsKey === $key && $spvColumn !== null);
             $selectCols = $valueCol . ', ' . $labelCol;
-            if (!empty($extraCols))
-                $selectCols .= ', ' . implode(', ', $extraCols);
+            if ($isSpvSource) {
+                $selectCols .= ', ' . $spvColumn;
+                }
 
             $query = "SELECT {$distinct} {$selectCols} FROM {$table} {$orderBy}";
             $result = $JobDB->query($query);
             $items = [];
             while ($row = $JobDB->fetchRow($result)) {
                 $item = ['id' => $row[$valueCol], 'label' => $row[$labelCol]];
-                if (!empty($sourceMarkers)) {
-                    $matchedIds = [];
-                    foreach ($sourceMarkers as $m) {
-                        $col = $m['column'];
-                        $raw = $row[$col] ?? ($row[strtolower($col)] ?? null);
-                        if ($raw === null)
-                            continue;
-                        $rawStr = (string) $raw;
-                        $allowed = is_array($m['value']) ? array_map('strval', $m['value']) : [(string) $m['value']];
-                        if (in_array($rawStr, $allowed, true))
-                            $matchedIds[] = $m['id'];
+                if ($isSpvSource) {
+                    $rawMarker = $row[$spvColumn] ?? ($row[strtolower($spvColumn)] ?? null);
+                    if ($rawMarker !== null && (string) $rawMarker === $spvValue) {
+                        $item['marked'] = true;
                         }
-                    if (!empty($matchedIds))
-                        $item['markers'] = $matchedIds;
                     }
                 $items[] = $item;
                 }

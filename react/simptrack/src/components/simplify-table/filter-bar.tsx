@@ -318,24 +318,16 @@ function AutocompleteFilter({ config }: AutocompleteFilterProps) {
 
   const allSelected = options.length > 0 && selectedValues.length === options.length;
 
-  // Marker badges (e.g. SPVs, Konzerngesellschaften): each badge selects/deselects
-  // its tagged subset of options at once. An option may carry multiple markers.
-  const markers = config.markers ?? [];
-  const markerBuckets = markers.map((m) => {
-    const ids = options.filter((o) => o.markers?.includes(m.id)).map((o) => o.id);
-    return {
-      meta: m,
-      ids,
-      allSelected: ids.length > 0 && ids.every((id) => selectedValues.includes(id)),
-    };
-  });
+  // SPV (or any other) marker badge: select / deselect all marked options at once.
+  const markedIds = config.marker ? options.filter((o) => o.marked).map((o) => o.id) : [];
+  const allMarkedSelected = markedIds.length > 0 && markedIds.every((id) => selectedValues.includes(id));
 
-  const handleToggleMarker = (ids: string[], allSelectedForMarker: boolean) => {
-    if (ids.length === 0) return;
-    if (allSelectedForMarker) {
-      setLocalSelectedValues(selectedValues.filter((v) => !ids.includes(v)));
+  const handleToggleMarked = () => {
+    if (markedIds.length === 0) return;
+    if (allMarkedSelected) {
+      setLocalSelectedValues(selectedValues.filter((v) => !markedIds.includes(v)));
     } else {
-      const merged = Array.from(new Set([...selectedValues, ...ids]));
+      const merged = Array.from(new Set([...selectedValues, ...markedIds]));
       setLocalSelectedValues(merged);
     }
     setInputValue('');
@@ -395,27 +387,19 @@ function AutocompleteFilter({ config }: AutocompleteFilterProps) {
                 Alle abwählen
               </button>
             </div>
-            {markerBuckets.some((b) => b.ids.length > 0) && (
-              <div className='flex flex-wrap gap-1 px-2 py-1.5 border-b'>
-                {markerBuckets
-                  .filter((b) => b.ids.length > 0)
-                  .map((b) => (
-                    <button
-                      key={b.meta.id}
-                      type='button'
-                      onClick={() => handleToggleMarker(b.ids, b.allSelected)}
-                      className='inline-flex items-center gap-1 rounded-full border px-1.5 py-px text-2xs font-medium transition-colors cursor-pointer hover:opacity-90'
-                      style={
-                        b.allSelected
-                          ? { backgroundColor: b.meta.color, borderColor: b.meta.color, color: '#fff' }
-                          : { backgroundColor: 'transparent', borderColor: b.meta.color, color: b.meta.color }
-                      }
-                      title={b.allSelected ? `${b.meta.label} abwählen` : `${b.meta.label} auswählen`}
-                    >
-                      {b.meta.label}
-                      <span className='opacity-70'>({b.ids.length})</span>
-                    </button>
-                  ))}
+            {config.marker && markedIds.length > 0 && (
+              <div className='px-2 py-1.5 border-b'>
+                <button
+                  type='button'
+                  onClick={handleToggleMarked}
+                  className='inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-2xs font-medium text-white transition-opacity hover:opacity-90 cursor-pointer'
+                  style={{ backgroundColor: config.marker.color }}
+                  title={allMarkedSelected ? `${config.marker.label} abwählen` : `${config.marker.label} auswählen`}
+                >
+                  <span className='inline-block h-1.5 w-1.5 rounded-full bg-white' />
+                  {config.marker.label}
+                  <span className='opacity-80'>({markedIds.length})</span>
+                </button>
               </div>
             )}
             <CommandList>
@@ -424,23 +408,14 @@ function AutocompleteFilter({ config }: AutocompleteFilterProps) {
                 {filteredOptions.map((opt) => (
                   <CommandItem key={opt.id} value={opt.label} onSelect={() => handleToggle(opt.id)} className='flex items-center gap-2'>
                     <HugeiconsIcon icon={Tick01Icon} size={14} className={selectedValues.includes(opt.id) ? 'text-primary' : 'invisible'} />
-                    <span className='flex-1 truncate'>{opt.label}</span>
-                    {opt.markers && opt.markers.length > 0 && (
-                      <span className='flex shrink-0 items-center gap-0.5'>
-                        {opt.markers.map((mid) => {
-                          const m = markers.find((x) => x.id === mid);
-                          if (!m) return null;
-                          return (
-                            <span
-                              key={mid}
-                              className='inline-block h-2 w-2 rounded-full'
-                              style={{ backgroundColor: m.color }}
-                              aria-label={m.label}
-                            />
-                          );
-                        })}
-                      </span>
+                    {config.marker && opt.marked && (
+                      <span
+                        className='inline-block h-2 w-2 shrink-0 rounded-full'
+                        style={{ backgroundColor: config.marker.color }}
+                        aria-label={config.marker.label}
+                      />
                     )}
+                    {opt.label}
                   </CommandItem>
                 ))}
               </CommandGroup>
