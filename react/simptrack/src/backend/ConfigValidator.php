@@ -64,6 +64,7 @@ class ConfigValidator
     $this->validateRowActions();
     $this->validateSpecialFilters();
     $this->validateSpvFilter();
+    $this->validateRowAuth();
     if ($this->jobDB !== null)
       $this->validateDbColumns();
     }
@@ -192,6 +193,54 @@ class ConfigValidator
           'availableSources' => array_keys($sources),
           'hint' => 'SPV marking only works on DB-queried dropdowns (DROPDOWN_SOURCES), not STATIC_DROPDOWNS.',
         ]
+      );
+      }
+    }
+
+  // --------------------------------------------------------------------------
+  // R7: ROW_AUTH (optional) describes how rows are restricted to the current
+  //     user. Accepts modes 'none' | 'equals' | 'list_contains' | 'custom'.
+  //     Each mode has its own required keys.
+  // --------------------------------------------------------------------------
+  private function validateRowAuth(): void
+    {
+    $auth = $this->config['ROW_AUTH'] ?? null;
+    if ($auth === null)
+      return; // legacy AUTH_COLUMN path; not validated here
+
+    if (!is_array($auth)) {
+      throw new ConfigValidationException(
+        'R7',
+        "ROW_AUTH must be an array.",
+        ['hint' => "Set ROW_AUTH to ['mode' => 'none'] to disable row-level auth."]
+      );
+      }
+
+    $mode = $auth['mode'] ?? null;
+    $allowedModes = ['none', 'equals', 'list_contains', 'custom'];
+    if (!in_array($mode, $allowedModes, true)) {
+      throw new ConfigValidationException(
+        'R7',
+        "ROW_AUTH.mode must be one of: " . implode(', ', $allowedModes) . ".",
+        ['mode' => $mode, 'hint' => "Use 'none' to disable row-level filtering."]
+      );
+      }
+
+    if ($mode === 'equals' || $mode === 'list_contains') {
+      if (empty($auth['column'])) {
+        throw new ConfigValidationException(
+          'R7',
+          "ROW_AUTH.column is required when mode is '{$mode}'.",
+          ['mode' => $mode, 'hint' => "Set ROW_AUTH['column'] to the DATA_VIEW column that holds the access value."]
+        );
+        }
+      }
+
+    if ($mode === 'custom' && empty($auth['sql'])) {
+      throw new ConfigValidationException(
+        'R7',
+        "ROW_AUTH.sql is required when mode is 'custom'.",
+        ['hint' => "Provide a SQL fragment in ROW_AUTH['sql']; use '{user}' as the placeholder for the current username."]
       );
       }
     }

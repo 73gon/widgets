@@ -8,6 +8,7 @@ use Throwable;
 
 require_once(__DIR__ . '/../../../includes/central.php');
 require_once(__DIR__ . '/DatabaseHelper.php');
+require_once(__DIR__ . '/ConfigNormalizer.php');
 require_once(__DIR__ . '/ConfigValidator.php');
 require_once(__DIR__ . '/Logger.php');
 
@@ -18,7 +19,7 @@ class Init extends Widget
 
     public function __construct()
         {
-        $this->config = require __DIR__ . '/config.php';
+        $this->config = \ConfigNormalizer::normalize(require __DIR__ . '/config.php');
         \Logger::configure($this->config['LOG_DIR'] ?? __DIR__ . '/logs');
         }
 

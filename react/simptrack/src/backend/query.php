@@ -8,6 +8,7 @@ use Throwable;
 
 require_once(__DIR__ . '/../../../includes/central.php');
 require_once(__DIR__ . '/DatabaseHelper.php');
+require_once(__DIR__ . '/ConfigNormalizer.php');
 require_once(__DIR__ . '/ConfigValidator.php');
 require_once(__DIR__ . '/Logger.php');
 
@@ -20,7 +21,7 @@ class Query extends Widget
 
   public function __construct()
     {
-    $this->config = require __DIR__ . '/config.php';
+    $this->config = \ConfigNormalizer::normalize(require __DIR__ . '/config.php');
     \Logger::configure($this->config['LOG_DIR'] ?? __DIR__ . '/logs');
     }
 
@@ -215,9 +216,12 @@ class Query extends Widget
       $listFilters[$key] = $this->decodeListParam($this->getParam($key, ''));
       }
 
-    // Sort map = field map + status (status is computed but sortable by raw DB column)
+    // Sort map = field map + status (status is computed but sortable by raw DB column).
+    // Status is optional: only register the sort key when STATUS_COLUMN is configured.
     $sortMap = $this->getFieldMap();
-    $sortMap['status'] = $this->config['STATUS_COLUMN'];
+    if (!empty($this->config['STATUS_COLUMN'])) {
+      $sortMap['status'] = $this->config['STATUS_COLUMN'];
+      }
 
     $orderSql = '';
     if (!empty($sortColumn) && array_key_exists($sortColumn, $sortMap)) {
@@ -272,16 +276,71 @@ class Query extends Widget
     return [$value];
     }
 
+  /**
+   * Build the row-level authorization WHERE clause for the current user.
+   * Returns null if no clause should be applied (mode 'none' or empty user).
+   * Honors $CONFIG['ROW_AUTH']; falls back to legacy $CONFIG['AUTH_COLUMN']
+   * (treated as 'list_contains') if ROW_AUTH is not set.
+   */
+  private function buildRowAuthClause(string $username): ?string
+    {
+    if (empty($username)) {
+      return null;
+      }
+
+    $auth = $this->config['ROW_AUTH'] ?? null;
+
+    // Backward compatibility: legacy AUTH_COLUMN behaves like list_contains.
+    if ($auth === null && !empty($this->config['AUTH_COLUMN'])) {
+      $auth = ['mode' => 'list_contains', 'column' => $this->config['AUTH_COLUMN']];
+      }
+
+    if (!is_array($auth)) {
+      return null;
+      }
+
+    $mode = $auth['mode'] ?? 'none';
+    if ($mode === 'none') {
+      return null;
+      }
+
+    $safeUser = addslashes($username);
+
+    switch ($mode) {
+      case 'equals':
+        $col = $auth['column'] ?? '';
+        if ($col === '')
+          return null;
+        return "{$col} = '{$safeUser}'";
+
+      case 'list_contains':
+        $col = $auth['column'] ?? '';
+        if ($col === '')
+          return null;
+        // Strict comma-separated list match (case-insensitive, whitespace-stripped),
+        // additionally guarded by a fuzzy LIKE for legacy parity.
+        $loose = "{$col} LIKE '%{$safeUser}%'";
+        $strict = "CONCAT(',', REPLACE(LOWER({$col}), ' ', ''), ',') LIKE CONCAT('%,', LOWER('{$safeUser}'), ',%')";
+        return "({$loose} AND {$strict})";
+
+      case 'custom':
+        $sql = $auth['sql'] ?? '';
+        if ($sql === '')
+          return null;
+        return '(' . str_replace('{user}', $safeUser, $sql) . ')';
+      }
+
+    return null;
+    }
+
   private function buildWhereClauses(array $filters, string $username, array $listFilters): array
     {
     $where = [];
-    $authColumn = $this->config['AUTH_COLUMN'];
 
-    // Username access filter
-    if (!empty($username)) {
-      $safeUser = addslashes($username);
-      $where[] = "{$authColumn} LIKE '%{$safeUser}%'";
-      $where[] = "CONCAT(',', REPLACE(LOWER({$authColumn}), ' ', ''), ',') LIKE CONCAT('%,', LOWER('{$safeUser}'), ',%')";
+    // Row-level access filter (configurable; see $CONFIG['ROW_AUTH']).
+    $authClause = $this->buildRowAuthClause($username);
+    if ($authClause !== null) {
+      $where[] = $authClause;
       }
 
     // Standard filters from registry definitions
@@ -349,12 +408,12 @@ class Query extends Widget
         }
       }
 
-    // Special filter: status
-    $statusCol = $this->config['STATUS_COLUMN'];
-    $escalationCol = $this->config['ESCALATION_COLUMN'];
+    // Special filter: status (optional — skipped entirely when STATUS_COLUMN is unset)
+    $statusCol = $this->config['STATUS_COLUMN'] ?? '';
+    $escalationCol = $this->config['ESCALATION_COLUMN'] ?? '';
     $dbHelper = $this->getDbHelper();
 
-    if (!empty($filters['status']) && $filters['status'] !== 'all') {
+    if (!empty($statusCol) && !empty($filters['status']) && $filters['status'] !== 'all') {
       $statusValue = strtolower($filters['status']);
       $eskalationSql = $dbHelper->tryConvertDate($escalationCol);
       $currentDateSql = $dbHelper->currentDateOnly();
@@ -387,14 +446,15 @@ class Query extends Widget
         }
       }
 
-    // Special filter: laufzeit (DATEDIFF-based ranges)
-    $laufzeitCol = $this->config['LAUFZEIT_COLUMN'];
-    if (!empty($filters['laufzeit']) && $filters['laufzeit'] !== 'all') {
+    // Special filter: laufzeit (DATEDIFF-based ranges). Optional — only
+    // applied when the customer config defines LAUFZEIT_COLUMN.
+    $laufzeitCol = $this->config['LAUFZEIT_COLUMN'] ?? '';
+    if ($laufzeitCol !== '' && !empty($filters['laufzeit']) && $filters['laufzeit'] !== 'all') {
       $value = $filters['laufzeit'];
       $daysSql = $dbHelper->dateDiffDays($laufzeitCol);
 
       $matched = false;
-      foreach ($this->config['LAUFZEIT_RANGES'] as $rangeLabel => $range) {
+      foreach (($this->config['LAUFZEIT_RANGES'] ?? []) as $rangeLabel => $range) {
         if ($value === $rangeLabel) {
           $min = $range[0];
           $max = $range[1];
@@ -420,9 +480,10 @@ class Query extends Widget
         }
       }
 
-    // Special filter: coor (boolean flag mapping)
-    $coorCol = $this->config['COOR_COLUMN'];
-    if (!empty($filters['coor']) && $filters['coor'] !== 'all') {
+    // Special filter: coor (boolean flag mapping). Customer-specific; only
+    // applied when the customer config defines COOR_COLUMN.
+    $coorCol = $this->config['COOR_COLUMN'] ?? '';
+    if ($coorCol !== '' && !empty($filters['coor']) && $filters['coor'] !== 'all') {
       $value = strtolower($filters['coor']);
       if ($value === 'ja') {
         $where[] = "{$coorCol} = 1";
@@ -444,7 +505,7 @@ class Query extends Widget
     // Standard field mapping from config
     $mapped = [];
     foreach ($this->getFieldMap() as $frontendKey => $dbCol) {
-      $mapped[$frontendKey] = $row[$dbCol] ?? '';
+      $mapped[$frontendKey] = $row[strtolower($dbCol)] ?? '';
       }
 
     // Auto boolean display: 1 → 'Ja', 0/null → 'Nein' for every boolean_10 field
@@ -453,31 +514,36 @@ class Query extends Widget
       $mapped[$fieldId] = ((int) $raw === 1) ? 'Ja' : 'Nein';
       }
 
-    // Computed field: status label
+    // Computed field: status label (optional — skipped when STATUS_COLUMN is unset)
     $processId = $row['processid'] ?? '';
-    $statusCol = strtolower($this->config['STATUS_COLUMN']);
-    $escalationCol = strtolower($this->config['ESCALATION_COLUMN']);
-    $statusId = $row[$statusCol] ?? '';
-    $statusLabels = $this->config['STATUS_LABELS'];
+    $statusColCfg = $this->config['STATUS_COLUMN'] ?? '';
+    $escalationColCfg = $this->config['ESCALATION_COLUMN'] ?? '';
+    $statusLabels = $this->config['STATUS_LABELS'] ?? [];
     $statusLabel = '';
 
-    if ($statusId === 'completed') {
-      $statusLabel = $statusLabels['completed'] ?? 'Beendet';
-      } else if ($statusId === 'rest') {
-      $eskalationDate = $row[$escalationCol] ?? '';
-      if (!empty($eskalationDate)) {
-        $eskalation = strtotime($eskalationDate);
-        $today = strtotime('today');
-        if ($eskalation <= $today) {
-          $statusLabel = $statusLabels['due'] ?? 'Faellig';
+    if (!empty($statusColCfg)) {
+      $statusCol = strtolower($statusColCfg);
+      $escalationCol = strtolower($escalationColCfg);
+      $statusId = $row[$statusCol] ?? '';
+
+      if ($statusId === 'completed') {
+        $statusLabel = $statusLabels['completed'] ?? 'Beendet';
+        } else if ($statusId === 'rest') {
+        $eskalationDate = $escalationCol !== '' ? ($row[$escalationCol] ?? '') : '';
+        if (!empty($eskalationDate)) {
+          $eskalation = strtotime($eskalationDate);
+          $today = strtotime('today');
+          if ($eskalation <= $today) {
+            $statusLabel = $statusLabels['due'] ?? 'Faellig';
+            } else {
+            $statusLabel = $statusLabels['not_due'] ?? 'Nicht Faellig';
+            }
           } else {
           $statusLabel = $statusLabels['not_due'] ?? 'Nicht Faellig';
           }
         } else {
-        $statusLabel = $statusLabels['not_due'] ?? 'Nicht Faellig';
+        $statusLabel = (string) $statusId;
         }
-      } else {
-      $statusLabel = $statusId;
       }
 
     // Emit processid + jrkey so ROW_ACTIONS urlTemplate placeholders resolve.

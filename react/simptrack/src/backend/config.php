@@ -4,213 +4,190 @@
  * Simptrack Widget — Generic Customer Configuration (Demo / Starter)
  * =============================================================================
  *
- * This is the SINGLE SOURCE OF TRUTH for all customer-specific values.
- * It ships as a neutral starter that demonstrates the full feature set of the
- * widget without any customer-specific business logic. To onboard a customer:
+ * Single source of truth for all customer-specific values.
  *
- *   1. Point DATA_VIEW at the customer's invoice/process view.
- *   2. Adjust FIELD_MAP entries to match the columns of that view.
- *   3. Set BASE_URL + TRACKING_PASSPHRASE for their JobRouter instance.
- *   4. Optionally re-theme via $CONFIG['THEME'].
+ * Compact field syntax
+ * --------------------
+ *   ['id' => 'mandant', 'label' => 'Mandant', 'dbColumn' => 'Mandant', 'filter' => 'text']
  *
- * Sections:
- *   1. Database
- *   2. URLs & Secrets
- *   3. Theme
- *   4. Field Map (columns + filters)
- *   5. Special Filters (status, laufzeit)
- *   6. Dropdown Sources (DB-queried options)
- *   7. Static Dropdowns (hardcoded options)
- *   8. Row Actions (action buttons per row)
- *   9. Status Map (DB status → display label)
- *   10. Cache
+ * Filter shorthands:
+ *   'text' | 'date' | 'daterange' | 'numberrange' | 'dropdown' | 'autocomplete' | 'boolean'
+ *
+ * Auto-derived field defaults (override only when needed):
+ *   id → camelCase(dbColumn) · label → id · type → 'text' · align → 'left'
+ *
+ * Every section below marked OPTIONAL has a built-in default in
+ * ConfigNormalizer.php. Uncomment only what you need to override.
+ *
+ * Full reference: FIELD_REGISTRY_GUIDE.md
  */
 
 $CONFIG = [];
 
 // =============================================================================
-// 1. DATABASE
+// 1. DATABASE                                                          REQUIRED
 // =============================================================================
 
-/** Database type: 'mssql', 'mysql', or 'auto' (auto-detect) */
-$CONFIG['DB_TYPE'] = 'auto';
-
-/**
- * Main SQL view / table used for data queries.
- * Replace with the customer's process / invoice view.
- */
 $CONFIG['DATA_VIEW'] = 'V_SIMPTRACK_DEMO';
 
-/** Table name for storing user preferences (auto-created on first run). */
-$CONFIG['PREFERENCES_TABLE'] = 'WIDGET_SIMPTRACK';
+// OPTIONAL — DB driver. Default 'auto' (detected via JobRouter).
+// $CONFIG['DB_TYPE'] = 'mssql';     // 'mssql' | 'mysql' | 'auto'
 
-/** Column that holds the authorization / access list per row. */
-$CONFIG['AUTH_COLUMN'] = 'berechtigung';
+// OPTIONAL — per-user preferences table (auto-created on first run).
+// $CONFIG['PREFERENCES_TABLE'] = 'WIDGET_SIMPTRACK';
+
+// OPTIONAL — dropdown-options cache lifetime in seconds. Default 600.
+// $CONFIG['CACHE_TTL'] = 600;
 
 // =============================================================================
-// 2. URLS & SECRETS
+// 2. URLS & SECRETS                                                    REQUIRED
 // =============================================================================
 
 /** Base URL of the customer's JobRouter instance (no trailing slash). */
 $CONFIG['BASE_URL'] = 'https://jobrouter.example.com/jobrouter';
 
-/** Passphrase used to generate MD5 tracking keys. Replace per customer. */
+/**
+ * Passphrase used to generate MD5 tracking keys ({key} placeholder in row
+ * actions). MUST match the customer's JobRouter tracking passphrase, otherwise
+ * Tracking_ShowTracking returns ZUGRIFF VERWEIGERT.
+ */
 $CONFIG['TRACKING_PASSPHRASE'] = 'change-me-per-customer';
 
 // =============================================================================
-// 3. THEME
-// =============================================================================
-
-$CONFIG['THEME'] = [
-  'primaryColor' => '#3b82f6',
-  'defaultMode' => 'dark', // 'dark' or 'light'
-];
-
-// =============================================================================
-// 4. FIELD MAP — Columns + Filters
+// 3. ROW-LEVEL ACCESS (ROW_AUTH)                                       OPTIONAL
 // =============================================================================
 //
-// Neutral starter set. Add / remove entries to match the customer's data view.
-// See FIELD_REGISTRY_GUIDE.md for the full schema reference.
+// Default: ['mode' => 'none'] — every user sees every row.
+// Available modes:
+//   $CONFIG['ROW_AUTH'] = ['mode' => 'equals',        'column' => 'owner'];
+//   $CONFIG['ROW_AUTH'] = ['mode' => 'list_contains', 'column' => 'berechtigung'];
+//   $CONFIG['ROW_AUTH'] = ['mode' => 'custom',
+//     'sql' => "EXISTS (SELECT 1 FROM ACL a WHERE a.id = t.id AND a.user = '{user}')"];
+
+// =============================================================================
+// 4. THEME                                                             OPTIONAL
+// =============================================================================
 //
+// Default: ['primaryColor' => '#ffcc00', 'defaultMode' => 'dark'].
+// $CONFIG['THEME'] = [
+//   'primaryColor' => '#0066cc',     // brand colour
+//   'defaultMode'  => 'light',       // 'light' | 'dark'
+// ];
+
+// =============================================================================
+// 5. STATUS BADGE (optional feature)                                   OPTIONAL
+// =============================================================================
+//
+// Set both columns to enable the coloured status badge column. Without these
+// the status feature stays disabled and no `status` field is emitted.
+//
+// $CONFIG['STATUS_COLUMN']     = 'status';      // values: 'completed' / 'rest'
+// $CONFIG['ESCALATION_COLUMN'] = 'eskalation';  // due-date column for active rows
+//
+// Default labels: ['completed' => 'Beendet', 'due' => 'Fällig', 'not_due' => 'Nicht fällig']
+// $CONFIG['STATUS_LABELS'] = [
+//   'completed' => 'Done',
+//   'due'       => 'Overdue',
+//   'not_due'   => 'On track',
+// ];
+
+// =============================================================================
+// 6. FIELD MAP — Columns + Filters                                     REQUIRED
+// =============================================================================
 
 $CONFIG['FIELD_MAP'] = [
+  ['id' => 'actions', 'type' => 'actions'],
+  ['id' => 'incident', 'label' => 'Vorgangsnummer', 'dbColumn' => 'incident', 'filter' => 'text'],
+  ['id' => 'mandant', 'label' => 'Mandant', 'dbColumn' => 'mandant', 'filter' => 'text'],
+  ['id' => 'entryDate', 'label' => 'Eingangsdatum', 'dbColumn' => 'eingangsdatum', 'type' => 'date'],
+  ['id' => 'stepLabel', 'label' => 'Schritt', 'dbColumn' => 'steplabel', 'filter' => 'autocomplete'],
+  ['id' => 'startDate', 'label' => 'Startdatum (Schritt)', 'dbColumn' => 'indate', 'type' => 'date'],
+  ['id' => 'fullName', 'label' => 'Bearbeiter', 'dbColumn' => 'fullname', 'filter' => 'text'],
+  ['id' => 'creditorName', 'label' => 'Kreditor', 'dbColumn' => 'kredname', 'filter' => 'text'],
+  ['id' => 'invoiceNumber', 'label' => 'Rechnungsnummer', 'dbColumn' => 'rechnungsnummer', 'filter' => 'text'],
+  ['id' => 'invoiceDate', 'label' => 'Rechnungsdatum', 'dbColumn' => 'rechnungsdatum', 'type' => 'date', 'filter' => 'daterange'],
+  ['id' => 'netAmount', 'label' => 'Nettobetrag', 'dbColumn' => 'nettobetrag', 'type' => 'currency', 'filter' => 'numberrange'],
+  ['id' => 'grossAmount', 'label' => 'Bruttobetrag', 'dbColumn' => 'bruttobetrag', 'type' => 'currency', 'filter' => 'numberrange'],
+  ['id' => 'dueDate', 'label' => 'Fälligkeit', 'dbColumn' => 'eskalation', 'type' => 'date'],
+  ['id' => 'paymentAmount', 'label' => 'Zahlbetrag', 'dbColumn' => 'zahlbetrag', 'type' => 'currency'],
+  ['id' => 'paymentDate', 'label' => 'Zahldatum', 'dbColumn' => 'zahldatum', 'type' => 'date'],
+  ['id' => 'documentId', 'label' => 'Dokument-ID', 'dbColumn' => 'documentid', 'filter' => 'text'],
+];
+
+// =============================================================================
+// 7. ROW ACTIONS                                                       OPTIONAL
+// =============================================================================
+//
+// Allowed placeholders in urlTemplate: {BASE_URL}, any FIELD_MAP id, plus
+// per-row tokens {processid}, {key} (MD5 from TRACKING_PASSPHRASE),
+// {username}, {documentId}, {incident}.
+
+$CONFIG['ROW_ACTIONS'] = [
   [
-    'id' => 'actions',
-    'label' => '',
-    'type' => 'actions',
-    'align' => 'center',
+    'id' => 'history',
+    'label' => 'Vorgangshistorie anzeigen',
+    'icon' => 'history',
+    'enabled' => true,
+    // {key} is the MD5 hash built from processid + TRACKING_PASSPHRASE + username.
+    'urlTemplate' => '{BASE_URL}/index.php?cmd=Tracking_ShowTracking&jrprocessid={processid}&display=popup&jrkey={key}',
+    'target' => 'popup',
+    'popupSize' => [1000, 700],
   ],
   [
-    'id' => 'status',
-    'label' => 'Status',
-    'type' => 'status',
-    'align' => 'center',
-    'dbColumn' => 'status',
-    'filter' => ['type' => 'dropdown', 'key' => 'status', 'defaultValue' => 'all', 'optionsKey' => 'status'],
-  ],
-  [
-    'id' => 'incident',
-    'label' => 'Vorgangsnummer',
-    'type' => 'text',
-    'align' => 'left',
-    'dbColumn' => 'incident',
-    'filter' => ['type' => 'text', 'key' => 'incident', 'dbColumn' => 'incident', 'dbType' => 'text_like', 'defaultValue' => ''],
-  ],
-  [
-    'id' => 'entryDate',
-    'label' => 'Eingangsdatum',
-    'type' => 'date',
-    'align' => 'left',
-    'dbColumn' => 'eingangsdatum',
-  ],
-  [
-    'id' => 'stepLabel',
-    'label' => 'Schritt',
-    'type' => 'text',
-    'align' => 'left',
-    'dbColumn' => 'steplabel',
-    'filter' => [
-      'id' => 'schritt',
-      'label' => 'Schritt',
-      'type' => 'autocomplete',
-      'key' => 'schritt',
-      'defaultValue' => [],
-      'optionsKey' => 'schritt',
-      'listFilter' => ['step', true],
-    ],
-  ],
-  [
-    'id' => 'startDate',
-    'label' => 'Startdatum (Schritt)',
-    'type' => 'date',
-    'align' => 'left',
-    'dbColumn' => 'indate',
-  ],
-  [
-    'id' => 'fullName',
-    'label' => 'Bearbeiter',
-    'type' => 'text',
-    'align' => 'left',
-    'dbColumn' => 'fullname',
-    'filter' => ['id' => 'bearbeiter', 'label' => 'Bearbeiter', 'type' => 'text', 'key' => 'bearbeiter', 'dbColumn' => 'fullname', 'dbType' => 'text_like', 'defaultValue' => ''],
-  ],
-  [
-    'id' => 'creditorName',
-    'label' => 'Kreditor',
-    'type' => 'text',
-    'align' => 'left',
-    'dbColumn' => 'kredname',
-    'filter' => ['id' => 'kreditor', 'label' => 'Kreditor', 'type' => 'text', 'key' => 'kreditor', 'dbColumn' => 'kredname', 'dbType' => 'text_like', 'defaultValue' => ''],
-  ],
-  [
-    'id' => 'invoiceNumber',
-    'label' => 'Rechnungsnummer',
-    'type' => 'text',
-    'align' => 'left',
-    'dbColumn' => 'rechnungsnummer',
-    'filter' => ['id' => 'rechnungsnummer', 'label' => 'Rechnungsnummer', 'type' => 'text', 'key' => 'rechnungsnummer', 'dbColumn' => 'rechnungsnummer', 'dbType' => 'text_like', 'defaultValue' => ''],
-  ],
-  [
-    'id' => 'invoiceDate',
-    'label' => 'Rechnungsdatum',
-    'type' => 'date',
-    'align' => 'left',
-    'dbColumn' => 'rechnungsdatum',
-    'filter' => [
-      'id' => 'rechnungsdatum',
-      'label' => 'Rechnungsdatum',
-      'type' => 'daterange',
-      'key' => 'rechnungsdatum',
-      'defaultValue' => '',
-      'rangeIds' => ['rechnungsdatumFrom', 'rechnungsdatumTo'],
-      'rangeDbTypes' => ['date_gte', 'date_lte'],
-      'dbColumn' => 'rechnungsdatum',
-    ],
-  ],
-  [
-    'id' => 'grossAmount',
-    'label' => 'Bruttobetrag',
-    'type' => 'currency',
-    'align' => 'left',
-    'dbColumn' => 'bruttobetrag',
-    'filter' => [
-      'id' => 'bruttobetrag',
-      'label' => 'Bruttobetrag',
-      'type' => 'numberrange',
-      'key' => 'bruttobetrag',
-      'defaultValue' => '',
-      'rangeIds' => ['bruttobetragFrom', 'bruttobetragTo'],
-      'rangeDbTypes' => ['number_gte', 'number_lte'],
-      'dbColumn' => 'bruttobetrag',
-    ],
-  ],
-  [
-    'id' => 'dueDate',
-    'label' => 'Fälligkeit',
-    'type' => 'date',
-    'align' => 'left',
-    'dbColumn' => 'eskalation',
-  ],
-  [
-    'id' => 'paymentAmount',
-    'label' => 'Zahlbetrag',
-    'type' => 'currency',
-    'align' => 'left',
-    'dbColumn' => 'zahlbetrag',
-  ],
-  [
-    'id' => 'paymentDate',
-    'label' => 'Zahldatum',
-    'type' => 'date',
-    'align' => 'left',
-    'dbColumn' => 'zahldatum',
+    'id' => 'open',
+    'label' => 'Vorgang öffnen',
+    'icon' => 'eye',
+    'enabled' => true,
+    'urlTemplate' => '{BASE_URL}/index.php?navigation=incident_show&processid={processid}&key={key}',
+    'target' => '_blank',
   ],
 ];
 
 // =============================================================================
-// 5. SPECIAL FILTERS
+// 8. DROPDOWN SOURCES — DB-queried option lists                        OPTIONAL
 // =============================================================================
+//
+// Keys MUST match the field id of the consuming filter.
+
+$CONFIG['DROPDOWN_SOURCES'] = [
+  'stepLabel' => [
+    'table' => 'DATA_VIEW',
+    'valueCol' => 'step',
+    'labelCol' => 'steplabel',
+    'distinct' => true,
+  ],
+];
+
+// =============================================================================
+// 9. STATIC DROPDOWNS — hard-coded option lists                        OPTIONAL
+// =============================================================================
+//
+// `status` and `laufzeit` get auto-injected by the normalizer when their
+// fields exist. Use this only for additional enums.
+//
+// $CONFIG['STATIC_DROPDOWNS'] = [
+//   'priority' => [
+//     ['value' => 'low',    'label' => 'Niedrig'],
+//     ['value' => 'normal', 'label' => 'Normal'],
+//     ['value' => 'high',   'label' => 'Hoch'],
+//   ],
+// ];
+
+// =============================================================================
+// 10. LAUFZEIT (age-bucket special filter)                             OPTIONAL
+// =============================================================================
+//
+// Buckets active rows by age in days. STATIC_DROPDOWNS['laufzeit'] is
+// auto-derived from the range labels.
+
+$CONFIG['LAUFZEIT_COLUMN'] = 'indate';
+
+$CONFIG['LAUFZEIT_RANGES'] = [
+  '0-5 Tage' => [0, 5],
+  '6-10 Tage' => [6, 10],
+  '11-20 Tage' => [11, 20],
+  '21+ Tage' => [21, null],
+];
 
 $CONFIG['SPECIAL_FILTERS'] = [
   [
@@ -224,111 +201,28 @@ $CONFIG['SPECIAL_FILTERS'] = [
   ],
 ];
 
-$CONFIG['LAUFZEIT_COLUMN'] = 'indate';
-
-$CONFIG['LAUFZEIT_RANGES'] = [
-  '0-5 Tage' => [0, 5],
-  '6-10 Tage' => [6, 10],
-  '11-20 Tage' => [11, 20],
-  '21+ Tage' => [21, null],
-];
-
-$CONFIG['COOR_COLUMN'] = 'coorflag';
-$CONFIG['STATUS_COLUMN'] = 'status';
-$CONFIG['ESCALATION_COLUMN'] = 'eskalation';
+// =============================================================================
+// 11. COMPUTED FIELDS                                                  OPTIONAL
+// =============================================================================
+//
+// Server-side value mappings. boolean_10 columns are mapped to Ja/Nein
+// automatically — use this only for non-boolean enums.
+//
+// $CONFIG['COMPUTED_FIELDS'] = [
+//   'ampel' => [
+//     'source'  => 'ampel',
+//     'mapping' => [1 => 'Rot', 2 => 'Gelb', 3 => 'Grün', null => ''],
+//   ],
+// ];
 
 // =============================================================================
-// 6. DROPDOWN SOURCES (DB-queried)
+// 12. DIAGNOSTICS                                                      OPTIONAL
 // =============================================================================
-
-$CONFIG['DROPDOWN_SOURCES'] = [
-  'schritt' => [
-    'table' => 'DATA_VIEW',
-    'valueCol' => 'step',
-    'labelCol' => 'steplabel',
-    'distinct' => true,
-  ],
-];
-
-// =============================================================================
-// 7. STATIC DROPDOWNS (hardcoded)
-// =============================================================================
-
-$CONFIG['STATIC_DROPDOWNS'] = [
-  'status' => [
-    ['id' => 'completed', 'label' => 'Beendet'],
-    ['id' => 'aktiv_alle', 'label' => 'Aktiv Alle'],
-    ['id' => 'faellig', 'label' => 'Aktiv Fällig'],
-    ['id' => 'not_faellig', 'label' => 'Aktiv Nicht Fällig'],
-  ],
-  'laufzeit' => [
-    ['id' => '0-5 Tage', 'label' => '0-5 Tage'],
-    ['id' => '6-10 Tage', 'label' => '6-10 Tage'],
-    ['id' => '11-20 Tage', 'label' => '11-20 Tage'],
-    ['id' => '21+ Tage', 'label' => '21+ Tage'],
-  ],
-];
-
-// =============================================================================
-// 8. ROW ACTIONS
-// =============================================================================
-
-$CONFIG['ROW_ACTIONS'] = [
-  [
-    'id' => 'history',
-    'label' => 'Vorgangshistorie anzeigen',
-    'icon' => 'history',
-    'enabled' => true,
-    'urlTemplate' => '{BASE_URL}/index.php?cmd=Tracking_ShowTracking&jrprocessid={processid}&display=popup&jrkey={key}',
-    'target' => 'popup',
-    'popupSize' => [1000, 700],
-  ],
-];
-
-// =============================================================================
-// 9. STATUS MAP
-// =============================================================================
-
-$CONFIG['STATUS_MAP'] = [
-  'completed' => ['label' => 'Beendet', 'type' => 'completed'],
-  'rest' => [
-    'label' => null,
-    'type' => null,
-  ],
-];
-
-$CONFIG['STATUS_LABELS'] = [
-  'completed' => 'Beendet',
-  'due' => 'Faellig',
-  'not_due' => 'Nicht Faellig',
-];
-
-// =============================================================================
-// 10. CACHE
-// =============================================================================
-
-$CONFIG['CACHE_TTL'] = 600;
-
-// =============================================================================
-// 11. LOCALE
-// =============================================================================
-
-$CONFIG['LOCALE'] = [
-  'language' => 'de-DE',
-  'currency' => 'EUR',
-];
-
-// =============================================================================
-// 12. COMPUTED FIELDS
-// =============================================================================
-
-$CONFIG['COMPUTED_FIELDS'] = [];
-
-// =============================================================================
-// 13. DIAGNOSTICS
-// =============================================================================
-
-$CONFIG['LOG_DIR'] = __DIR__ . '/logs';
-$CONFIG['DEBUG_LOG'] = false;
+//
+// Default LOG_DIR puts log files in <widget>/logs/. Override only if you
+// want them somewhere else.
+//
+// $CONFIG['LOG_DIR']   = __DIR__ . '/../../logs';   // custom location
+// $CONFIG['DEBUG_LOG'] = true;                      // log every built WHERE-SQL
 
 return $CONFIG;

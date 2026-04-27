@@ -3,24 +3,12 @@ import type { FilterPreset } from './types';
 // ============================================
 // DEFAULT FILTER PRESETS (UI-level convenience)
 // ============================================
+//
+// Ships empty by design. Customers create their own presets at runtime via the
+// preset-save UI; we deliberately do NOT bundle customer-specific presets
+// (e.g. "Coor Schnittstelle") in the generic widget.
 
-export const DEFAULT_FILTER_PRESETS: FilterPreset[] = [
-  {
-    id: 'overdue',
-    label: 'Überfällige Rechnungen',
-    filters: { status: 'faellig' },
-    sort: { column: 'dueDate', direction: 'asc' },
-    visible: true,
-    isCustom: false,
-  },
-  {
-    id: 'coor',
-    label: 'Coor Schnittstelle',
-    filters: { status: 'aktiv_alle', schritt: ['4001'] },
-    visible: true,
-    isCustom: false,
-  },
-];
+export const DEFAULT_FILTER_PRESETS: FilterPreset[] = [];
 
 // ============================================
 // LAZY LOADING CONFIGURATION

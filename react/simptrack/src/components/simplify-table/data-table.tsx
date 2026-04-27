@@ -210,7 +210,7 @@ interface DataTableRowProps {
 }
 
 function DataTableRow({ row, columns }: DataTableRowProps) {
-  const status = (row.status || '').toLowerCase();
+  const status = String(row.status ?? '').toLowerCase();
   const isDue = status === 'faellig' || status === 'fällig' || status === 'due';
   const isNotDue = status === 'not_faellig' || status === 'nicht fällig' || status === 'not_due';
 
@@ -282,7 +282,7 @@ interface StatusCellProps {
 }
 
 function StatusCell({ status, runtime, dueDate }: StatusCellProps) {
-  const statusLower = (status || '').toLowerCase();
+  const statusLower = String(status ?? '').toLowerCase();
 
   let icon = HelpCircleIcon;
   let color = 'text-muted-foreground';

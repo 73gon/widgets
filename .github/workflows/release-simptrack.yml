@@ -55,23 +55,47 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
+          # The release folder is built from scratch every run so leftover files
+          # from a previous build cannot leak into the zip.
           rm -rf release
           mkdir -p release/Simptrack
-          # 1. Built frontend (contents of dist/, not the dist folder itself)
+
+          # 1. Built frontend — only the contents of dist/ go into Simptrack/.
+          if [ ! -d dist ]; then
+            echo "::error::dist/ is missing — did 'bun run build' fail?" >&2
+            exit 1
+          fi
           cp -R dist/. release/Simptrack/
-          # 2. All backend files (contents of src/backend/, no nesting)
-          cp -R src/backend/. release/Simptrack/
-          # 3. Drop any markdown shipped from the backend folder
+
+          # 2. Backend (PHP entry points + helpers + config). Use rsync so we
+          #    can explicitly exclude files that must never ship in a release.
+          rsync -a \
+            --exclude='*.md' \
+            --exclude='logs/' \
+            --exclude='cache/' \
+            --exclude='.DS_Store' \
+            --exclude='Thumbs.db' \
+            src/backend/ release/Simptrack/
+
+          # 3. Final safety net at the top level of Simptrack/.
           find release/Simptrack -maxdepth 1 -type f -iname '*.md' -delete
-          # 4. Drop any cache directory that might exist locally
-          rm -rf release/Simptrack/cache
+
+          echo "---- release/Simptrack contents ----"
+          find release/Simptrack -maxdepth 2 | sort
 
       - name: Create zip
         shell: bash
         run: |
           set -euo pipefail
           cd release
-          zip -r "Simptrack-v${{ steps.version.outputs.version }}.zip" Simptrack
+          # -r recursive, -X strip extra file attributes (smaller, reproducible).
+          # Only the 'Simptrack' folder is added, so the zip root contains
+          # exactly one entry: Simptrack/.
+          zip -r -X "Simptrack-v${{ steps.version.outputs.version }}.zip" Simptrack
+
+          echo "---- zip contents ----"
+          unzip -l "Simptrack-v${{ steps.version.outputs.version }}.zip"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -82,3 +106,23 @@ jobs:
           prerelease: false
           fail_on_unmatched_files: true
           files: react/simptrack/release/Simptrack-v${{ steps.version.outputs.version }}.zip
+          body: |
+            ## Installation
+
+            Download **`Simptrack-v${{ steps.version.outputs.version }}.zip`** below
+            and unzip it into your JobRouter widgets folder:
+
+            ```
+            <jobrouter>/dashboard/MyWidgets/
+            ```
+
+            Inside the zip you will find a single top-level folder named
+            `Simptrack/`, containing the built frontend (the contents of `dist/`)
+            and the PHP backend (the contents of `src/backend/`) — nothing else.
+
+            > Ignore the auto-generated **"Source code (zip)"** / **"Source code (tar.gz)"**
+            > assets — GitHub attaches those to every release and they contain the
+            > full repository, not the deployable widget.
+
+            See [README.md](https://github.com/${{ github.repository }}/blob/${{ steps.version.outputs.tag }}/react/simptrack/README.md)
+            for configuration and update instructions.

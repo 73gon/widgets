@@ -8,6 +8,7 @@ use Throwable;
 
 require_once(__DIR__ . '/../../../includes/central.php');
 require_once(__DIR__ . '/DatabaseHelper.php');
+require_once(__DIR__ . '/ConfigNormalizer.php');
 
 class SavePreferences extends Widget
     {
@@ -16,7 +17,7 @@ class SavePreferences extends Widget
 
     public function __construct()
         {
-        $this->config = require __DIR__ . '/config.php';
+        $this->config = \ConfigNormalizer::normalize(require __DIR__ . '/config.php');
         }
 
     public function getTitle(): string
