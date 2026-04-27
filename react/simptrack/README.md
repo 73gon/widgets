@@ -1,90 +1,94 @@
 # Simptrack Widget
 
-Generic, customer-neutral starter version of the SimplifyTable widget.
-Used for prospect demos and as the baseline when onboarding new customers.
+Generische, kundenneutrale Starter-Variante des SimplifyTable-Widgets.
+Wird für Kundendemos und als Basis für das Onboarding neuer Kunden eingesetzt.
 
-It ships the full feature set (filtering, sorting, pagination, user
-preferences, row actions, status badges, autocomplete dropdowns, …) but
-without any customer-specific columns, branding, or business logic. To turn
-Simptrack into a customer-specific widget, copy it, rename it, and edit
-[src/backend/config.php](src/backend/config.php).
-
----
-
-## Architecture in one paragraph
-
-`config.php` is the single source of truth. `init.php` ships the schema
-(columns, filters, dropdown options, theme, locale, row actions) to the
-frontend. `query.php` builds the SQL from the same config.
-`ConfigValidator.php` validates the schema on every `init` request (rules
-R1–R6) and returns a machine-readable error if something is wrong. The React
-frontend is a thin consumer — it does not hardcode column names, filter
-keys, or labels.
+Das Widget liefert den vollen Funktionsumfang (Filtern, Sortieren, Paginierung,
+Benutzereinstellungen, Zeilenaktionen, Status-Badges, Autocomplete-Dropdowns,
+…), enthält aber keine kundenspezifischen Spalten, kein Branding und keine
+Geschäftslogik. Um Simptrack zu einem kundenspezifischen Widget zu machen,
+kopieren, umbenennen und [src/backend/config.php](src/backend/config.php)
+anpassen.
 
 ---
 
-## Config reference
+## Architektur in einem Absatz
 
-All blocks live in [src/backend/config.php](src/backend/config.php). Each
-block is described below in the order it appears in the file.
+`config.php` ist die einzige Wahrheitsquelle (Single Source of Truth).
+`init.php` liefert das Schema (Spalten, Filter, Dropdown-Optionen, Theme,
+Locale, Zeilenaktionen) an das Frontend. `query.php` baut das SQL aus
+derselben Konfiguration. `ConfigValidator.php` validiert das Schema bei jedem
+`init`-Aufruf (Regeln R1–R6) und liefert eine maschinenlesbare Fehlermeldung,
+falls etwas nicht stimmt. Das React-Frontend ist ein dünner Konsument — es
+hartkodiert weder Spaltennamen noch Filter-Keys oder Labels.
 
-### 1. Database
+---
 
-| Key                 | Purpose                                                             |
-| ------------------- | ------------------------------------------------------------------- |
-| `DB_TYPE`           | `'mssql'`, `'mysql'`, or `'auto'` (auto-detect from JobRouter).     |
-| `DATA_VIEW`         | Main SQL view / table queried by the widget.                        |
-| `PREFERENCES_TABLE` | Table that stores per-user preferences. Auto-created on first run.  |
-| `AUTH_COLUMN`       | Column holding the comma-separated access list used to filter rows. |
+## Konfigurationsreferenz
 
-### 2. URLs & Secrets
+Alle Blöcke befinden sich in [src/backend/config.php](src/backend/config.php).
+Jeder Block ist unten in der Reihenfolge beschrieben, in der er in der Datei
+auftaucht.
 
-| Key                   | Purpose                                                          |
-| --------------------- | ---------------------------------------------------------------- |
-| `BASE_URL`            | Base URL of the customer's JobRouter (no trailing slash).        |
-| `TRACKING_PASSPHRASE` | Secret used to generate the MD5 tracking key for incident links. |
+### 1. Datenbank
+
+| Schlüssel           | Zweck                                                                           |
+| ------------------- | ------------------------------------------------------------------------------- |
+| `DB_TYPE`           | `'mssql'`, `'mysql'` oder `'auto'` (automatische Erkennung über JobRouter).     |
+| `DATA_VIEW`         | Haupt-SQL-View bzw. -Tabelle, aus der das Widget liest.                         |
+| `PREFERENCES_TABLE` | Tabelle für Benutzereinstellungen. Wird beim ersten Start automatisch erstellt. |
+| `AUTH_COLUMN`       | Spalte mit der kommaseparierten Berechtigungsliste pro Zeile.                   |
+
+### 2. URLs & Geheimnisse
+
+| Schlüssel             | Zweck                                                             |
+| --------------------- | ----------------------------------------------------------------- |
+| `BASE_URL`            | Basis-URL des JobRouters beim Kunden (ohne abschließenden Slash). |
+| `TRACKING_PASSPHRASE` | Geheimnis zur Erzeugung des MD5-Tracking-Keys für Vorgangs-Links. |
 
 ### 3. Theme
 
-| Key           | Purpose                                                              |
-| ------------- | -------------------------------------------------------------------- |
-| `defaultMode` | `'light'` or `'dark'` — the widget's default appearance.             |
-| `primary`     | Primary CSS color (used for highlights, the active scrollbar, etc.). |
-| `accent`      | Accent color used for badges and secondary highlights.               |
+| Schlüssel     | Zweck                                                    |
+| ------------- | -------------------------------------------------------- |
+| `defaultMode` | `'light'` oder `'dark'` — Standardanzeige des Widgets.   |
+| `primary`     | Primäre CSS-Farbe (Highlights, aktiver Scrollbalken, …). |
+| `accent`      | Akzentfarbe für Badges und sekundäre Hervorhebungen.     |
 
-### 4. `FIELD_MAP` (columns + filters)
+### 4. `FIELD_MAP` (Spalten + Filter)
 
-An array of column definitions. Each entry can declare a `filter` block; if
-present, the column also acts as a filter in the filter bar.
+Array von Spaltendefinitionen. Jeder Eintrag kann einen `filter`-Block
+enthalten; ist dieser gesetzt, dient die Spalte zusätzlich als Filter in der
+Filterleiste.
 
-Per entry:
+Pro Eintrag:
 
-- `id` — frontend identifier.
-- `label` — header label shown in the table.
+- `id` — Frontend-Identifier.
+- `label` — Spaltenüberschrift in der Tabelle.
 - `type` — `'text'`, `'number'`, `'date'`, `'status'`, `'action'`.
 - `align` — `'left'` | `'center'` | `'right'`.
-- `dbColumn` — name in `DATA_VIEW`.
-- `filter` — optional. Subkeys:
-  - `id`, `label`, `key` — frontend identifiers.
+- `dbColumn` — Spaltenname in der `DATA_VIEW`.
+- `filter` — optional. Unterschlüssel:
+  - `id`, `label`, `key` — Frontend-Identifier.
   - `type` — `'text'`, `'dropdown'`, `'autocomplete'`, `'daterange'`, `'numberrange'`.
-  - `dbColumn`, `dbType` — SQL column and predicate type (`'text_like'`, `'in'`, `'between'`, …).
-  - `defaultValue` — initial value.
-  - `optionsKey` — for dropdown/autocomplete: which `DROPDOWN_SOURCES` /
-    `STATIC_DROPDOWNS` entry to load.
-  - `listFilter` — optional `[column, distinct]` used to scope autocomplete.
+  - `dbColumn`, `dbType` — SQL-Spalte und Vergleichstyp (`'text_like'`, `'in'`, `'between'`, …).
+  - `defaultValue` — Initialwert.
+  - `optionsKey` — bei dropdown/autocomplete: welcher Eintrag aus
+    `DROPDOWN_SOURCES` / `STATIC_DROPDOWNS` geladen wird.
+  - `listFilter` — optional `[Spalte, distinct]` zur Eingrenzung der Autocomplete.
 
 ### 5. `SPECIAL_FILTERS`
 
-Standalone filters that aren't tied to a single column (status grouping,
-duration buckets, etc.). Same shape as `FIELD_MAP[].filter`.
+Eigenständige Filter, die nicht an eine einzelne Spalte gebunden sind
+(Status-Gruppierungen, Laufzeit-Buckets usw.). Gleiche Struktur wie
+`FIELD_MAP[].filter`.
 
 ### 6. `DROPDOWN_SOURCES`
 
-DB-queried options. One entry per logical dropdown:
+Per Datenbank ermittelte Optionen. Ein Eintrag pro logischem Dropdown:
 
 ```php
 'schritt' => [
-  'table'    => 'DATA_VIEW',     // or a literal table name
+  'table'    => 'DATA_VIEW',     // oder ein konkreter Tabellenname
   'valueCol' => 'step',
   'labelCol' => 'steplabel',
   'distinct' => true,
@@ -94,116 +98,133 @@ DB-queried options. One entry per logical dropdown:
 
 ### 7. `STATIC_DROPDOWNS`
 
-Hardcoded option lists keyed identically to `DROPDOWN_SOURCES`. Used for
-status, priority, and any other enum that doesn't live in the database.
+Hartkodierte Optionslisten, identisch geschlüsselt wie `DROPDOWN_SOURCES`.
+Verwendet für Status, Priorität und alle anderen Enums, die nicht in der
+Datenbank liegen.
 
 ### 8. `ROW_ACTIONS`
 
-Buttons rendered in the action column per row. Each entry declares an icon,
-label, URL template (with `{column}` placeholders), and optional permission
-hooks.
+Schaltflächen in der Aktionsspalte pro Zeile. Jeder Eintrag definiert ein
+Icon, ein Label, eine URL-Vorlage (mit `{spalte}`-Platzhaltern) und optionale
+Berechtigungs-Hooks.
 
 ### 9. `STATUS_MAP`
 
-Maps raw `status` values from the DB to a display label and a color token.
-Drives the colored status badges.
+Bildet rohe `status`-Werte aus der DB auf Anzeige-Label und Farb-Token ab.
+Steuert die farbigen Status-Badges.
 
 ### 10. `CACHE`
 
-| Key                  | Purpose                                       |
-| -------------------- | --------------------------------------------- |
-| `dropdownTtlSeconds` | How long dropdown options are cached on disk. |
-| `enabled`            | Master switch.                                |
+| Schlüssel            | Zweck                                                  |
+| -------------------- | ------------------------------------------------------ |
+| `dropdownTtlSeconds` | Wie lange Dropdown-Optionen auf Platte gecacht werden. |
+| `enabled`            | Hauptschalter für den Cache.                           |
 
 ### 11. `LOCALE`
 
-Date/number formatting locale (`'de-DE'`, `'en-US'`, …) and the timezone.
+Locale für Datums- und Zahlenformatierung (`'de-DE'`, `'en-US'`, …) plus
+Zeitzone.
 
 ### 12. `COMPUTED_FIELDS` (optional)
 
-Server-side derived columns (e.g. `laufzeit` computed from two timestamps).
+Server-seitig berechnete Spalten (z. B. `laufzeit` aus zwei Zeitstempeln).
 
 ### 13. `DIAGNOSTICS` (optional)
 
-Toggles verbose logging in `init.php` / `query.php` for support sessions.
+Schaltet detailliertes Logging in `init.php` / `query.php` für
+Support-Sitzungen ein.
 
-### 14. `OPTION_MARKERS` (optional, not present in Simptrack)
+### 14. `OPTION_MARKERS` (optional, in Simptrack nicht enthalten)
 
-Per-option tags on autocomplete dropdowns (e.g. SPVs, Konzerngesellschaften).
-Not used in the generic Simptrack template — see the `simplifytable` widget
-for an example.
+Markierungen für einzelne Optionen in Autocomplete-Dropdowns (z. B. SPVs,
+Konzerngesellschaften). Im generischen Simptrack-Template nicht aktiv —
+siehe das `simplifytable`-Widget für ein Beispiel.
 
 ---
 
-## First-time deployment to a new customer
+## Erstinstallation bei einem neuen Kunden
 
-1. **Get the build.** Download the latest release zip from GitHub Releases
-   (`simptrack-vX.Y.Z.zip`). It contains the compiled `dist/` plus the PHP
-   backend.
-2. **Drop it into JobRouter.** Extract to
-   `<jobrouter>/dashboard/MyWidgets/Simptrack/`. (Rename the folder if the
-   customer needs a custom widget name.)
-3. **Edit `src/backend/config.php`.** At minimum change:
+1. **Build herunterladen.** Aktuelles Release-Zip aus den GitHub Releases
+   laden (`Simptrack-vX.Y.Z.zip`). Es enthält das gebaute Frontend und das
+   PHP-Backend.
+2. **In JobRouter ablegen.** Inhalt nach
+   `<jobrouter>/dashboard/MyWidgets/Simptrack/` entpacken. Den Ordner bei
+   Bedarf umbenennen, wenn der Kunde einen eigenen Widget-Namen wünscht.
+3. **`config.php` bearbeiten.** Mindestens anpassen:
    - `DB_TYPE`, `DATA_VIEW`, `AUTH_COLUMN`
    - `BASE_URL`, `TRACKING_PASSPHRASE`
-   - `FIELD_MAP` columns to match the customer's view
-   - `THEME` colors to match the customer's branding
-4. **Smoke-test in JobRouter.** Open the dashboard. If validation fails, the
-   widget shows a clear `ConfigValidationException` with the exact rule and
-   key that broke.
-5. **(Optional) Adjust `STATUS_MAP`, `ROW_ACTIONS`, `STATIC_DROPDOWNS`** to
-   match the customer's process.
+   - `FIELD_MAP`-Spalten an die View des Kunden
+   - `THEME`-Farben an das Branding des Kunden
+4. **In JobRouter testen.** Dashboard öffnen. Schlägt die Validierung fehl,
+   zeigt das Widget eine klare `ConfigValidationException` mit der genauen
+   Regel und dem fehlerhaften Schlüssel.
+5. **(Optional) `STATUS_MAP`, `ROW_ACTIONS`, `STATIC_DROPDOWNS`** an den
+   Prozess des Kunden anpassen.
 
 ---
 
-## Updating to a new release
+## Update auf ein neues Release
 
-> **Critical: do not overwrite `src/backend/config.php` blindly.** It contains
-> per-customer values (DATA_VIEW, BASE_URL, secrets, FIELD_MAP).
+> **Wichtig: `config.php` niemals blind überschreiben.** Sie enthält
+> kundenspezifische Werte (DATA_VIEW, BASE_URL, Geheimnisse, FIELD_MAP).
 
-Recommended workflow:
+Empfohlener Ablauf:
 
-1. Back up the current `src/backend/config.php` and any
-   `src/backend/cache/` contents you want to keep.
-2. Download the new release zip from GitHub Releases.
-3. Extract it over the existing widget folder.
-4. **Restore the backed-up `config.php`** (or merge new optional keys from
-   the shipped `config.php` into the customer's copy).
-5. Delete `src/backend/cache/dropdown_options.json` so dropdowns are
-   re-fetched.
-6. Smoke-test the widget. If `ConfigValidator` complains about a new required
-   key, add it to the customer's config and retry.
+1. Aktuelle `config.php` und ggf. den Inhalt von `cache/` sichern.
+2. Neues Release-Zip aus den GitHub Releases laden.
+3. Über den bestehenden Widget-Ordner entpacken.
+4. **Gesicherte `config.php` zurückspielen** (oder neue optionale Schlüssel
+   aus der ausgelieferten `config.php` in die Kunden-Variante übernehmen).
+5. `cache/dropdown_options.json` löschen, damit Dropdowns neu geladen werden.
+6. Widget testen. Meldet `ConfigValidator` einen neuen Pflichtschlüssel,
+   diesen in die Kunden-Konfiguration ergänzen und erneut prüfen.
 
-A safer alternative is to keep the customer's `config.php` outside the widget
-folder (e.g. in an environment-specific location) and `require` it from a
-small `config.php` shim — that way release updates never touch customer
-values.
+Sicherer ist es, die `config.php` des Kunden außerhalb des Widget-Ordners
+abzulegen (z. B. an einer umgebungsspezifischen Stelle) und sie aus einer
+kleinen `config.php`-Hülle per `require` einzubinden — so berührt ein
+Release-Update nie die Kunden-Werte.
 
 ---
 
-## Customer customization checklist
+## Checkliste für die Kundenanpassung
 
-- [ ] `THEME.primary` / `THEME.accent` set to brand colors
-- [ ] `DATA_VIEW` points at the right table/view
-- [ ] `FIELD_MAP` columns reflect customer schema (labels in their language)
-- [ ] `STATUS_MAP` covers every status value the customer uses
-- [ ] `ROW_ACTIONS` URL templates point at the right JobRouter processes
-- [ ] `BASE_URL` + `TRACKING_PASSPHRASE` set per environment (dev / prod)
-- [ ] `LOCALE` matches the customer's region
+- [ ] `THEME.primary` / `THEME.accent` auf die Markenfarben gesetzt
+- [ ] `DATA_VIEW` zeigt auf die richtige Tabelle bzw. View
+- [ ] `FIELD_MAP`-Spalten passen zum Schema (Labels in der Sprache des Kunden)
+- [ ] `STATUS_MAP` deckt jeden vom Kunden genutzten Status-Wert ab
+- [ ] `ROW_ACTIONS`-URLs zeigen auf die richtigen JobRouter-Prozesse
+- [ ] `BASE_URL` + `TRACKING_PASSPHRASE` pro Umgebung gesetzt (Dev / Prod)
+- [ ] `LOCALE` passt zur Region des Kunden
 
 ---
 
-## Building from source
+## Build aus dem Quellcode
 
 ```powershell
 cd widgets/react/simptrack
-npm install
-npm run build
+bun install
+bun run build
 ```
 
-Output lands in `dist/`. Copy `dist/` plus the `src/backend/` folder to the
-JobRouter widget directory (or use the release zip workflow above).
+Das Ergebnis landet in `dist/`. Den Inhalt von `dist/` zusammen mit allen
+Dateien aus `src/backend/` in den JobRouter-Widget-Ordner kopieren — oder
+einfach den GitHub-Release-Workflow oben nutzen.
 
-# React + TypeScript + Vite + shadcn/ui
+---
 
-This is a template for a new Vite project with React, TypeScript, and shadcn/ui.
+## Release-Pipeline
+
+Releases werden über GitHub Actions gebaut
+([.github/workflows/release-simptrack.yml](../../.github/workflows/release-simptrack.yml)).
+Auslöser ist ein Tag im Format `simptrack-vX.Y.Z`. Beispiel für die erste
+Version:
+
+```powershell
+git tag simptrack-v0.1.0
+git push origin simptrack-v0.1.0
+```
+
+Der Workflow baut mit Bun, packt das Ergebnis in `Simptrack-vX.Y.Z.zip`
+(Top-Level-Ordner `Simptrack/` mit dem `dist`-Inhalt und allen
+Backend-Dateien, ohne `.md` und ohne `.github`) und veröffentlicht es als
+GitHub Release.
