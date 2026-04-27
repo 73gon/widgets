@@ -159,11 +159,11 @@ einfach den Release-Workflow benutzen.
 
 Releases werden über GitHub Actions gebaut
 ([.github/workflows/release-simptrack.yml](../../.github/workflows/release-simptrack.yml)).
-Auslöser ist ein Tag im Format `simptrack-vX.Y.Z`:
+Auslöser ist ein Tag im Format `vX.Y.Z`:
 
 ```powershell
-git tag simptrack-v0.1.0
-git push origin simptrack-v0.1.0
+git tag v0.1.0
+git push origin v0.1.0
 ```
 
 Der Workflow baut mit Bun, packt das Ergebnis in `Simptrack-vX.Y.Z.zip`

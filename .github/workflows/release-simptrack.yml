@@ -3,7 +3,7 @@ name: Release Simptrack
 on:
   push:
     tags:
-      - 'simptrack-v*'
+      - 'v*'
   workflow_dispatch:
     inputs:
       version:
@@ -32,13 +32,13 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: |
           if [ "${{ github.event_name }}" = "push" ]; then
-            raw="${GITHUB_REF_NAME#simptrack-v}"
+            raw="${GITHUB_REF_NAME#v}"
           else
             raw="${{ github.event.inputs.version }}"
             raw="${raw#v}"
           fi
           echo "version=${raw}" >> "$GITHUB_OUTPUT"
-          echo "tag=simptrack-v${raw}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${raw}" >> "$GITHUB_OUTPUT"
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2

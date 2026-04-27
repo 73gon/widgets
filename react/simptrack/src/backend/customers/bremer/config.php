@@ -4,11 +4,14 @@
  * Simptrack Widget — Customer Configuration: BREMER
  * =============================================================================
  *
- * Wraps the customer's invoice/process SQL view ER_VORGANG, which joins
- * dbo.JRINCIDENT + dbo.LASTSTEP + dbo.RE_KOPF (latest LASTSTEP per process).
+ * Generated from the customer's invoice/process SQL view, which joins:
+ *   dbo.JRINCIDENT (JRI)  +  dbo.LASTSTEP  +  dbo.RE_KOPF
  *
- * Uses the compact field syntax — see src/backend/config.php for the
- * full reference.
+ * The DATA_VIEW below should point to a SQL Server view that wraps the join
+ * shown in the customer's source query (filtered by LASTSTEP.indate = MAX).
+ *
+ * Field IDs use simptrack's neutral naming; dbColumn values map to the
+ * customer's actual columns (SQL Server is case-insensitive).
  */
 
 $CONFIG = [];
@@ -17,16 +20,23 @@ $CONFIG = [];
 // 1. DATABASE
 // =============================================================================
 
+$CONFIG['DB_TYPE'] = 'auto';
+
+/** Customer-specific view wrapping JRINCIDENT + LASTSTEP + RE_KOPF. */
 $CONFIG['DATA_VIEW'] = 'ER_VORGANG';
+
+$CONFIG['PREFERENCES_TABLE'] = 'WIDGET_SIMPTRACK';
+
+$CONFIG['ROW_AUTH'] = [
+  'mode' => 'none',
+];
 
 // =============================================================================
 // 2. URLS & SECRETS
 // =============================================================================
 
 $CONFIG['BASE_URL'] = 'https://jobrouter.bremerbau.local/jobrouter';
-
-/** TODO: replace with the real JobRouter tracking passphrase from Bremer's instance. */
-$CONFIG['TRACKING_PASSPHRASE'] = 'change-me-bremer';
+$CONFIG['TRACKING_PASSPHRASE'] = 'F8PYN48WCD]Ug^H]';
 
 // =============================================================================
 // 3. THEME
@@ -42,40 +52,281 @@ $CONFIG['THEME'] = [
 // =============================================================================
 
 $CONFIG['FIELD_MAP'] = [
-  ['id' => 'actions', 'type' => 'actions'],
-
-  ['id' => 'incident', 'label' => 'Vorgangsnummer', 'dbColumn' => 'incident', 'filter' => 'text'],
-  ['id' => 'mandant', 'label' => 'Mandant', 'dbColumn' => 'Mandant', 'filter' => 'text'],
-
-  ['id' => 'entryDate', 'label' => 'Eingangsdatum', 'type' => 'date', 'dbColumn' => 'Eingangsdatum'],
-  ['id' => 'bookingDate', 'label' => 'Buchungsdatum', 'type' => 'date', 'dbColumn' => 'Buchungsdatum'],
-
-  ['id' => 'stepLabel', 'label' => 'Schritt', 'dbColumn' => 'steplabel', 'filter' => 'autocomplete'],
-  ['id' => 'startDate', 'label' => 'Startdatum (Schritt)', 'type' => 'date', 'dbColumn' => 'indate'],
-  ['id' => 'fullName', 'label' => 'Bearbeiter', 'dbColumn' => 'username', 'filter' => 'text'],
-
-  ['id' => 'creditorNumber', 'label' => 'Kreditor-Nr.', 'dbColumn' => 'Kreditorennummer', 'filter' => 'text'],
-  ['id' => 'creditorName', 'label' => 'Kreditor', 'dbColumn' => 'KREDITORENNAME', 'filter' => 'text'],
-
-  ['id' => 'documentNumber', 'label' => 'Dokumenten-ID', 'dbColumn' => 'DW_DokumentID'],
-  ['id' => 'invoiceNumber', 'label' => 'Rechnungsnummer', 'dbColumn' => 'Externe_Belegnummer', 'filter' => 'text'],
-  ['id' => 'invoiceDate', 'label' => 'Belegdatum', 'type' => 'date', 'dbColumn' => 'Belegdatum', 'filter' => 'daterange'],
-
-  ['id' => 'netAmount', 'label' => 'Nettobetrag', 'type' => 'currency', 'dbColumn' => 'Nettobetrag', 'filter' => 'numberrange'],
-
-  ['id' => 'dueDate', 'label' => 'Fälligkeit', 'type' => 'date', 'dbColumn' => 'Faelligkeitsdatum'],
-  ['id' => 'cashDiscountDueDate', 'label' => 'Skontofälligkeit', 'type' => 'date', 'dbColumn' => 'Skontofaelligkeit'],
-  ['id' => 'cashDiscountAmount', 'label' => 'Skontobetrag', 'type' => 'currency', 'dbColumn' => 'Skontobetrag'],
-
-  ['id' => 'costCenter', 'label' => 'Kostenstelle', 'dbColumn' => 'Kostenstelle', 'filter' => 'text'],
-  ['id' => 'invoiceKind', 'label' => 'Rechnungsart', 'dbColumn' => 'RECHNUNGSART', 'filter' => 'dropdown'],
-  ['id' => 'invoiceType', 'label' => 'Rechnungstyp', 'dbColumn' => 'RECHNUNGSTYP', 'filter' => 'dropdown'],
-  ['id' => 'documentKind', 'label' => 'Belegart', 'dbColumn' => 'JOBSELECT_BELEGART', 'filter' => 'dropdown'],
-  ['id' => 'downPayment', 'label' => 'Anzahlung', 'dbColumn' => 'Anzahlungsvorgang'],
+  [
+    'id' => 'actions',
+    'label' => '',
+    'type' => 'actions',
+    'align' => 'center',
+  ],
+  [
+    'id' => 'incident',
+    'label' => 'Vorgangsnummer',
+    'type' => 'text',
+    'align' => 'left',
+    'dbColumn' => 'incident',
+    'filter' => ['type' => 'text', 'key' => 'incident', 'dbColumn' => 'incident', 'dbType' => 'text_like', 'defaultValue' => ''],
+  ],
+  [
+    'id' => 'mandant',
+    'label' => 'Mandant',
+    'type' => 'text',
+    'align' => 'left',
+    'dbColumn' => 'Mandant',
+    'filter' => ['id' => 'mandant', 'label' => 'Mandant', 'type' => 'text', 'key' => 'mandant', 'dbColumn' => 'Mandant', 'dbType' => 'text_like', 'defaultValue' => ''],
+  ],
+  [
+    'id' => 'entryDate',
+    'label' => 'Eingangsdatum',
+    'type' => 'date',
+    'align' => 'left',
+    'dbColumn' => 'Eingangsdatum',
+  ],
+  [
+    'id' => 'bookingDate',
+    'label' => 'Buchungsdatum',
+    'type' => 'date',
+    'align' => 'left',
+    'dbColumn' => 'Buchungsdatum',
+  ],
+  [
+    'id' => 'stepLabel',
+    'label' => 'Schritt',
+    'type' => 'text',
+    'align' => 'left',
+    'dbColumn' => 'steplabel',
+    'filter' => [
+      'id' => 'schritt',
+      'label' => 'Schritt',
+      'type' => 'autocomplete',
+      'key' => 'schritt',
+      'defaultValue' => [],
+      'optionsKey' => 'schritt',
+      'listFilter' => ['step', true],
+    ],
+  ],
+  [
+    'id' => 'startDate',
+    'label' => 'Startdatum (Schritt)',
+    'type' => 'date',
+    'align' => 'left',
+    'dbColumn' => 'indate',
+  ],
+  [
+    'id' => 'fullName',
+    'label' => 'Bearbeiter',
+    'type' => 'text',
+    'align' => 'left',
+    'dbColumn' => 'username',
+    'filter' => ['id' => 'bearbeiter', 'label' => 'Bearbeiter', 'type' => 'text', 'key' => 'bearbeiter', 'dbColumn' => 'username', 'dbType' => 'text_like', 'defaultValue' => ''],
+  ],
+  [
+    'id' => 'creditorNumber',
+    'label' => 'Kreditor-Nr.',
+    'type' => 'text',
+    'align' => 'left',
+    'dbColumn' => 'Kreditorennummer',
+    'filter' => ['id' => 'kreditornr', 'label' => 'Kreditor-Nr.', 'type' => 'text', 'key' => 'kreditornr', 'dbColumn' => 'Kreditorennummer', 'dbType' => 'text_like', 'defaultValue' => ''],
+  ],
+  [
+    'id' => 'creditorName',
+    'label' => 'Kreditor',
+    'type' => 'text',
+    'align' => 'left',
+    'dbColumn' => 'KREDITORENNAME',
+    'filter' => ['id' => 'kreditor', 'label' => 'Kreditor', 'type' => 'text', 'key' => 'kreditor', 'dbColumn' => 'KREDITORENNAME', 'dbType' => 'text_like', 'defaultValue' => ''],
+  ],
+  [
+    'id' => 'documentNumber',
+    'label' => 'Dokumenten-ID',
+    'type' => 'text',
+    'align' => 'left',
+    'dbColumn' => 'DW_DokumentID',
+    'filter' => ['id' => 'belegnr', 'label' => 'Beleg-Nr.', 'type' => 'text', 'key' => 'belegnr', 'dbColumn' => 'Nr', 'dbType' => 'text_like', 'defaultValue' => ''],
+  ],
+  [
+    'id' => 'invoiceNumber',
+    'label' => 'Rechnungsnummer',
+    'type' => 'text',
+    'align' => 'left',
+    'dbColumn' => 'Externe_Belegnummer',
+    'filter' => ['id' => 'rechnungsnummer', 'label' => 'Rechnungsnummer', 'type' => 'text', 'key' => 'rechnungsnummer', 'dbColumn' => 'Externe_Belegnummer', 'dbType' => 'text_like', 'defaultValue' => ''],
+  ],
+  [
+    'id' => 'invoiceDate',
+    'label' => 'Belegdatum',
+    'type' => 'date',
+    'align' => 'left',
+    'dbColumn' => 'Belegdatum',
+    'filter' => [
+      'id' => 'belegdatum',
+      'label' => 'Belegdatum',
+      'type' => 'daterange',
+      'key' => 'belegdatum',
+      'defaultValue' => '',
+      'rangeIds' => ['belegdatumFrom', 'belegdatumTo'],
+      'rangeDbTypes' => ['date_gte', 'date_lte'],
+      'dbColumn' => 'Belegdatum',
+    ],
+  ],
+  [
+    'id' => 'netAmount',
+    'label' => 'Nettobetrag',
+    'type' => 'currency',
+    'align' => 'left',
+    'dbColumn' => 'Nettobetrag',
+    'filter' => [
+      'id' => 'nettobetrag',
+      'label' => 'Nettobetrag',
+      'type' => 'numberrange',
+      'key' => 'nettobetrag',
+      'defaultValue' => '',
+      'rangeIds' => ['nettobetragFrom', 'nettobetragTo'],
+      'rangeDbTypes' => ['number_gte', 'number_lte'],
+      'dbColumn' => 'Nettobetrag',
+    ],
+  ],
+  [
+    'id' => 'dueDate',
+    'label' => 'Fälligkeit',
+    'type' => 'date',
+    'align' => 'left',
+    'dbColumn' => 'Faelligkeitsdatum',
+  ],
+  [
+    'id' => 'cashDiscountDueDate',
+    'label' => 'Skontofälligkeit',
+    'type' => 'date',
+    'align' => 'left',
+    'dbColumn' => 'Skontofaelligkeit',
+  ],
+  [
+    'id' => 'cashDiscountAmount',
+    'label' => 'Skontobetrag',
+    'type' => 'currency',
+    'align' => 'left',
+    'dbColumn' => 'Skontobetrag',
+  ],
+  [
+    'id' => 'costCenter',
+    'label' => 'Kostenstelle',
+    'type' => 'text',
+    'align' => 'left',
+    'dbColumn' => 'Kostenstelle',
+    'filter' => ['id' => 'kostenstelle', 'label' => 'Kostenstelle', 'type' => 'text', 'key' => 'kostenstelle', 'dbColumn' => 'Kostenstelle', 'dbType' => 'text_like', 'defaultValue' => ''],
+  ],
+  [
+    'id' => 'invoiceKind',
+    'label' => 'Rechnungsart',
+    'type' => 'text',
+    'align' => 'left',
+    'dbColumn' => 'RECHNUNGSART',
+    'filter' => ['type' => 'dropdown', 'key' => 'rechnungsart', 'defaultValue' => 'all', 'optionsKey' => 'rechnungsart'],
+  ],
+  [
+    'id' => 'invoiceType',
+    'label' => 'Rechnungstyp',
+    'type' => 'text',
+    'align' => 'left',
+    'dbColumn' => 'RECHNUNGSTYP',
+    'filter' => ['type' => 'dropdown', 'key' => 'rechnungstyp', 'defaultValue' => 'all', 'optionsKey' => 'rechnungstyp'],
+  ],
+  [
+    'id' => 'documentKind',
+    'label' => 'Belegart',
+    'type' => 'text',
+    'align' => 'left',
+    'dbColumn' => 'JOBSELECT_BELEGART',
+    'filter' => ['type' => 'dropdown', 'key' => 'belegart', 'defaultValue' => 'all', 'optionsKey' => 'belegart'],
+  ],
+  [
+    'id' => 'downPayment',
+    'label' => 'Anzahlung',
+    'type' => 'text',
+    'align' => 'left',
+    'dbColumn' => 'Anzahlungsvorgang',
+  ],
 ];
 
 // =============================================================================
-// 5. ROW ACTIONS
+// 5. SPECIAL FILTERS
+// =============================================================================
+
+$CONFIG['SPECIAL_FILTERS'] = [
+  [
+    'id' => 'laufzeit',
+    'label' => 'Laufzeit',
+    'type' => 'dropdown',
+    'key' => 'laufzeit',
+    'defaultValue' => 'all',
+    'optionsKey' => 'laufzeit',
+    'handler' => 'laufzeit',
+  ],
+];
+
+$CONFIG['LAUFZEIT_COLUMN'] = 'indate';
+
+$CONFIG['LAUFZEIT_RANGES'] = [
+  '0-5 Tage' => [0, 5],
+  '6-10 Tage' => [6, 10],
+  '11-20 Tage' => [11, 20],
+  '21+ Tage' => [21, null],
+];
+
+$CONFIG['STATUS_COLUMN'] = '';
+$CONFIG['ESCALATION_COLUMN'] = 'Faelligkeitsdatum';
+
+// =============================================================================
+// 6. DROPDOWN SOURCES (DB-queried)
+// =============================================================================
+
+$CONFIG['DROPDOWN_SOURCES'] = [
+  'schritt' => [
+    'table' => 'DATA_VIEW',
+    'valueCol' => 'step',
+    'labelCol' => 'steplabel',
+    'distinct' => true,
+  ],
+  'rechnungsart' => [
+    'table' => 'DATA_VIEW',
+    'valueCol' => 'RECHNUNGSART',
+    'labelCol' => 'RECHNUNGSART',
+    'distinct' => true,
+  ],
+  'rechnungstyp' => [
+    'table' => 'DATA_VIEW',
+    'valueCol' => 'RECHNUNGSTYP',
+    'labelCol' => 'RECHNUNGSTYP',
+    'distinct' => true,
+  ],
+  'belegart' => [
+    'table' => 'DATA_VIEW',
+    'valueCol' => 'JOBSELECT_BELEGART',
+    'labelCol' => 'JOBSELECT_BELEGART',
+    'distinct' => true,
+  ],
+];
+
+// =============================================================================
+// 7. STATIC DROPDOWNS
+// =============================================================================
+
+$CONFIG['STATIC_DROPDOWNS'] = [
+  'status' => [
+    ['id' => 'completed', 'label' => 'Beendet'],
+    ['id' => 'aktiv_alle', 'label' => 'Aktiv Alle'],
+    ['id' => 'faellig', 'label' => 'Aktiv Fällig'],
+    ['id' => 'not_faellig', 'label' => 'Aktiv Nicht Fällig'],
+  ],
+  'laufzeit' => [
+    ['id' => '0-5 Tage', 'label' => '0-5 Tage'],
+    ['id' => '6-10 Tage', 'label' => '6-10 Tage'],
+    ['id' => '11-20 Tage', 'label' => '11-20 Tage'],
+    ['id' => '21+ Tage', 'label' => '21+ Tage'],
+  ],
+];
+
+// =============================================================================
+// 8. ROW ACTIONS
 // =============================================================================
 
 $CONFIG['ROW_ACTIONS'] = [
@@ -100,14 +351,49 @@ $CONFIG['ROW_ACTIONS'] = [
 ];
 
 // =============================================================================
-// 6. DROPDOWN SOURCES (DB-queried option lists)
+// 9. STATUS MAP
 // =============================================================================
 
-$CONFIG['DROPDOWN_SOURCES'] = [
-  'stepLabel' => ['table' => 'DATA_VIEW', 'valueCol' => 'step', 'labelCol' => 'steplabel', 'distinct' => true],
-  'invoiceKind' => ['table' => 'DATA_VIEW', 'valueCol' => 'RECHNUNGSART', 'labelCol' => 'RECHNUNGSART', 'distinct' => true],
-  'invoiceType' => ['table' => 'DATA_VIEW', 'valueCol' => 'RECHNUNGSTYP', 'labelCol' => 'RECHNUNGSTYP', 'distinct' => true],
-  'documentKind' => ['table' => 'DATA_VIEW', 'valueCol' => 'JOBSELECT_BELEGART', 'labelCol' => 'JOBSELECT_BELEGART', 'distinct' => true],
+$CONFIG['STATUS_MAP'] = [
+  'completed' => ['label' => 'Beendet', 'type' => 'completed'],
+  'rest' => [
+    'label' => null,
+    'type' => null,
+  ],
 ];
+
+$CONFIG['STATUS_LABELS'] = [
+  'completed' => 'Beendet',
+  'due' => 'Faellig',
+  'not_due' => 'Nicht Faellig',
+];
+
+// =============================================================================
+// 10. CACHE
+// =============================================================================
+
+$CONFIG['CACHE_TTL'] = 600;
+
+// =============================================================================
+// 11. LOCALE
+// =============================================================================
+
+$CONFIG['LOCALE'] = [
+  'language' => 'de-DE',
+  'currency' => 'EUR',
+];
+
+// =============================================================================
+// 12. COMPUTED FIELDS
+// =============================================================================
+
+$CONFIG['COMPUTED_FIELDS'] = [];
+
+// =============================================================================
+// 13. DIAGNOSTICS
+// =============================================================================
+
+$CONFIG['LOG_DIR'] = __DIR__ . '/logs';
+$CONFIG['DEBUG_LOG'] = false;
 
 return $CONFIG;
