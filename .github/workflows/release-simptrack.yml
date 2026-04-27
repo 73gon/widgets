@@ -1,0 +1,84 @@
+name: Release Simptrack
+
+on:
+  push:
+    tags:
+      - 'simptrack-v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g. 0.1.0). Used only for manual runs.'
+        required: true
+        default: '0.1.0'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: react/simptrack
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            raw="${GITHUB_REF_NAME#simptrack-v}"
+          else
+            raw="${{ github.event.inputs.version }}"
+            raw="${raw#v}"
+          fi
+          echo "version=${raw}" >> "$GITHUB_OUTPUT"
+          echo "tag=simptrack-v${raw}" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build
+        run: bun run build
+
+      - name: Assemble release folder
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf release
+          mkdir -p release/Simptrack
+          # 1. Built frontend (contents of dist/, not the dist folder itself)
+          cp -R dist/. release/Simptrack/
+          # 2. All backend files (contents of src/backend/, no nesting)
+          cp -R src/backend/. release/Simptrack/
+          # 3. Drop any markdown shipped from the backend folder
+          find release/Simptrack -maxdepth 1 -type f -iname '*.md' -delete
+          # 4. Drop any cache directory that might exist locally
+          rm -rf release/Simptrack/cache
+
+      - name: Create zip
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd release
+          zip -r "Simptrack-v${{ steps.version.outputs.version }}.zip" Simptrack
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: Simptrack v${{ steps.version.outputs.version }}
+          draft: false
+          prerelease: false
+          fail_on_unmatched_files: true
+          files: react/simptrack/release/Simptrack-v${{ steps.version.outputs.version }}.zip
