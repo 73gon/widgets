@@ -35,9 +35,23 @@ class Logger
     self::write('WARN', $context, $data);
     }
 
+  public static function info(string $context, array $data = []): void
+    {
+    self::write('INFO', $context, $data);
+    }
+
   public static function debug(string $context, array $data = []): void
     {
     self::write('DEBUG', $context, $data);
+    }
+
+  /**
+   * Returns elapsed milliseconds since $startTime (from microtime(true)).
+   * Use: $t = microtime(true); …work…; $ms = Logger::timeMs($t);
+   */
+  public static function timeMs(float $startTime): float
+    {
+    return round((microtime(true) - $startTime) * 1000, 2);
     }
 
   private static function write(string $level, string $context, array $data): void

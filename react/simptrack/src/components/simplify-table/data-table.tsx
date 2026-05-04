@@ -338,7 +338,7 @@ const ACTION_ICON_MAP: Record<string, typeof TimeQuarterIcon> = {
 };
 
 const ACTION_COLOR_MAP: Record<string, { active: string; hover: string; bg: string }> = {
-  history: { active: '!text-blue-500', hover: 'hover:!text-blue-600', bg: 'hover:bg-blue-500/10' },
+  history: { active: '!text-primary', hover: 'hover:!text-primary', bg: 'hover:bg-primary/10' },
   invoice: { active: 'text-amber-500!', hover: 'hover:text-amber-600!', bg: 'hover:bg-amber-500/10' },
   protocol: { active: 'text-purple-500!', hover: 'hover:text-purple-600!', bg: 'hover:bg-purple-500/10' },
 };

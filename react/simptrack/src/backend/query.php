@@ -12,6 +12,22 @@ require_once(__DIR__ . '/ConfigNormalizer.php');
 require_once(__DIR__ . '/ConfigValidator.php');
 require_once(__DIR__ . '/Logger.php');
 
+if (!class_exists(__NAMESPACE__ . '\\ExportLimitException', false)) {
+  class ExportLimitException extends \RuntimeException
+    {
+    public int $total;
+    public int $limit;
+    public function __construct(int $total, int $limit)
+      {
+      parent::__construct(
+        "Der Export enthält {$total} Zeilen, das konfigurierte Maximum beträgt {$limit}. Bitte Filter setzen, um die Ergebnismenge zu reduzieren."
+      );
+      $this->total = $total;
+      $this->limit = $limit;
+      }
+    }
+  }
+
 class Query extends Widget
   {
   private array $config;
@@ -109,6 +125,34 @@ class Query extends Widget
     return $ids;
     }
 
+  private function getSelectColumns(): string
+    {
+    $columns = [];
+    foreach ($this->config['FIELD_MAP'] as $field) {
+      if (!empty($field['dbColumn'])) {
+        $columns[strtolower($field['dbColumn'])] = $field['dbColumn'];
+        }
+      }
+
+    foreach (['processid'] as $column) {
+      $columns[strtolower($column)] = $column;
+      }
+
+    foreach (['STATUS_COLUMN', 'ESCALATION_COLUMN'] as $configKey) {
+      if (!empty($this->config[$configKey])) {
+        $columns[strtolower($this->config[$configKey])] = $this->config[$configKey];
+        }
+      }
+
+    foreach ($this->config['COMPUTED_FIELDS'] as $definition) {
+      if (!empty($definition['source'])) {
+        $columns[strtolower($definition['source'])] = $definition['source'];
+        }
+      }
+
+    return implode(', ', array_values($columns));
+    }
+
   private function getDbHelper(): \DatabaseHelper
     {
     if (!isset($this->dbHelper)) {
@@ -125,6 +169,14 @@ class Query extends Widget
       $response = $widget->handleRequest();
       header('Content-Type: application/json');
       echo json_encode($response);
+      } catch (ExportLimitException $e) {
+      http_response_code(400);
+      header('Content-Type: application/json');
+      echo json_encode([
+        'error' => $e->getMessage(),
+        'limit' => $e->limit,
+        'total' => $e->total,
+      ]);
       } catch (\ConfigValidationException $e) {
       \Logger::error('config.validation', [
         'rule' => $e->rule,
@@ -142,21 +194,23 @@ class Query extends Widget
         'details' => $e->context,
       ]);
       } catch (Exception $e) {
+      $lastSql = $widget instanceof self ? $widget->lastSql : null;
       \Logger::error('query.exception', [
         'message' => $e->getMessage(),
         'file' => $e->getFile(),
         'line' => $e->getLine(),
-        'sql' => $widget?->lastSql,
+        'sql' => $lastSql,
         'trace' => $e->getTraceAsString(),
       ]);
       http_response_code(500);
       echo json_encode(['error' => 'Exception: ' . $e->getMessage(), 'file' => $e->getFile(), 'line' => $e->getLine()]);
       } catch (Throwable $e) {
+      $lastSql = $widget instanceof self ? $widget->lastSql : null;
       \Logger::error('query.throwable', [
         'message' => $e->getMessage(),
         'file' => $e->getFile(),
         'line' => $e->getLine(),
-        'sql' => $widget?->lastSql,
+        'sql' => $lastSql,
         'trace' => $e->getTraceAsString(),
       ]);
       http_response_code(500);
@@ -173,13 +227,19 @@ class Query extends Widget
     {
     $this->lastSql = $sql;
     if (!empty($this->config['DEBUG_LOG'])) {
-      \Logger::debug('query.sql', ['sql' => $sql]);
+      $t = microtime(true);
+      $result = $this->getJobDB()->query($sql);
+      \Logger::debug('query.sql', ['sql' => $sql, 'ms' => \Logger::timeMs($t)]);
+      return $result;
       }
     return $this->getJobDB()->query($sql);
     }
 
   private function handleRequest(): array
     {
+    $t0 = microtime(true);
+    $debug = !empty($this->config['DEBUG_LOG']);
+
     (new \ConfigValidator($this->config, $this->getJobDB()))->validate();
 
     $page = max(1, (int) $this->getParam('page', 1));
@@ -216,6 +276,24 @@ class Query extends Widget
       $listFilters[$key] = $this->decodeListParam($this->getParam($key, ''));
       }
 
+    if ($debug) {
+      $activeFilters = array_filter($filters, function ($value) {
+        return $value !== '' && $value !== 'all';
+        });
+      $activeListFilters = array_filter($listFilters, function ($value) {
+        return !empty($value);
+        });
+      \Logger::debug('query.request', [
+        'page' => $page,
+        'perPage' => $perPage,
+        'export' => $export,
+        'sort' => "{$sortColumn} {$sortDirection}",
+        'user' => $username,
+        'filters' => $activeFilters,
+        'listFilters' => $activeListFilters,
+      ]);
+      }
+
     // Sort map = field map + status (status is computed but sortable by raw DB column).
     // Status is optional: only register the sort key when STATUS_COLUMN is configured.
     $sortMap = $this->getFieldMap();
@@ -235,17 +313,31 @@ class Query extends Widget
 
     $dataView = $this->config['DATA_VIEW'];
 
-    $countQuery = "SELECT COUNT(*) as total FROM {$dataView} {$whereSql}";
-    $countResult = $this->runSql($countQuery);
-    $totalRow = $this->getJobDB()->fetchRow($countResult);
-    $total = $totalRow ? (int) $totalRow['total'] : 0;
-
     $dbHelper = $this->getDbHelper();
+    $selectColumns = $this->getSelectColumns();
+    $total = 0;
 
     if ($export) {
-      $dataQuery = "SELECT * FROM {$dataView} {$whereSql} {$orderSql}";
+      $maxRows = $this->config['EXPORT_MAX_ROWS'] ?? null;
+      if ($maxRows !== null) {
+        $countResult = $this->runSql("SELECT COUNT(*) as total FROM {$dataView} {$whereSql}");
+        $countRow = $this->getJobDB()->fetchRow($countResult);
+        $exportTotal = $countRow ? (int) ($countRow['total'] ?? $countRow['TOTAL'] ?? 0) : 0;
+        if ($exportTotal > (int) $maxRows) {
+          throw new ExportLimitException($exportTotal, (int) $maxRows);
+          }
+        }
+      $dataQuery = "SELECT {$selectColumns} FROM {$dataView} {$whereSql} {$orderSql}";
+      } elseif ($dbHelper->isMssql()) {
+      $baseQuery = "SELECT {$selectColumns}, COUNT(*) OVER() AS __simptrack_total FROM {$dataView} {$whereSql} {$orderSql}";
+      $dataQuery = $dbHelper->paginateQuery($baseQuery, $offset, $perPage);
       } else {
-      $baseQuery = "SELECT * FROM {$dataView} {$whereSql} {$orderSql}";
+      $countQuery = "SELECT COUNT(*) as total FROM {$dataView} {$whereSql}";
+      $countResult = $this->runSql($countQuery);
+      $totalRow = $this->getJobDB()->fetchRow($countResult);
+      $total = $totalRow ? (int) $totalRow['total'] : 0;
+
+      $baseQuery = "SELECT {$selectColumns} FROM {$dataView} {$whereSql} {$orderSql}";
       $dataQuery = $dbHelper->paginateQuery($baseQuery, $offset, $perPage);
       }
     $result = $this->runSql($dataQuery);
@@ -253,7 +345,26 @@ class Query extends Widget
     $booleanFields = $this->getBooleanFieldIds();
     $data = [];
     while ($row = $this->getJobDB()->fetchRow($result)) {
+      if (!$export && $dbHelper->isMssql() && $total === 0) {
+        $windowTotal = $row['__simptrack_total'] ?? ($row['__SIMPTRACK_TOTAL'] ?? null);
+        $total = $windowTotal !== null ? (int) $windowTotal : 0;
+        }
       $data[] = $this->mapRow($row, $username, $booleanFields);
+      }
+
+    if ($export) {
+      $total = count($data);
+      }
+
+    if ($debug) {
+      \Logger::debug('query.result', [
+        'total_db_rows' => $total,
+        'returned_rows' => count($data),
+        'page' => $page,
+        'perPage' => $perPage,
+        'export' => $export,
+        'total_ms' => \Logger::timeMs($t0),
+      ]);
       }
 
     return [

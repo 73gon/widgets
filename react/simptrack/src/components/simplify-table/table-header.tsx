@@ -19,7 +19,7 @@ export function TableHeader() {
     try {
       const allData = await fetchAllForExport();
       const visibleCols = columns.filter((c) => c.visible !== false);
-      exportToExcel(visibleCols, allData);
+      exportToExcel(visibleCols, allData, undefined, state.theme.primaryColor);
     } catch (error) {
       console.error('Export failed:', error);
     } finally {

@@ -9,6 +9,7 @@ use Throwable;
 require_once(__DIR__ . '/../../../includes/central.php');
 require_once(__DIR__ . '/DatabaseHelper.php');
 require_once(__DIR__ . '/ConfigNormalizer.php');
+require_once(__DIR__ . '/Logger.php');
 
 class SavePreferences extends Widget
     {
@@ -18,6 +19,7 @@ class SavePreferences extends Widget
     public function __construct()
         {
         $this->config = \ConfigNormalizer::normalize(require __DIR__ . '/config.php');
+        \Logger::configure($this->config['LOG_DIR'] ?? __DIR__ . '/logs');
         }
 
     public function getTitle(): string
@@ -33,9 +35,21 @@ class SavePreferences extends Widget
             header('Content-Type: application/json');
             echo json_encode($response);
             } catch (Exception $e) {
+            \Logger::error('savepreferences.exception', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString(),
+            ]);
             http_response_code(500);
             echo json_encode(['error' => 'Exception: ' . $e->getMessage(), 'file' => $e->getFile(), 'line' => $e->getLine()]);
             } catch (Throwable $e) {
+            \Logger::error('savepreferences.throwable', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString(),
+            ]);
             http_response_code(500);
             echo json_encode(['error' => 'Error: ' . $e->getMessage(), 'file' => $e->getFile(), 'line' => $e->getLine()]);
             }
@@ -56,6 +70,8 @@ class SavePreferences extends Widget
 
     private function handleRequest(): array
         {
+        $t0 = microtime(true);
+        $debug = !empty($this->config['DEBUG_LOG']);
         $JobDB = $this->getJobDB();
         $dbHelper = $this->getDbHelper();
         $tableName = $this->config['PREFERENCES_TABLE'];
@@ -86,7 +102,13 @@ class SavePreferences extends Widget
         $safeThemeMode = $dbHelper->quoteOrNull($themeMode ?: null);
 
         $checkQuery = "SELECT id FROM {$tableName} WHERE username = {$quotedUsername}";
-        $result = $JobDB->query($checkQuery);
+        if ($debug) {
+            $tc = microtime(true);
+            $result = $JobDB->query($checkQuery);
+            \Logger::debug('savepreferences.check', ['sql' => $checkQuery, 'ms' => \Logger::timeMs($tc)]);
+            } else {
+            $result = $JobDB->query($checkQuery);
+            }
         $exists = $JobDB->fetchRow($result);
 
         $updatedAt = $dbHelper->updatedAtExpression();
@@ -108,7 +130,13 @@ class SavePreferences extends Widget
                     updated_at = {$updatedAt}
                 WHERE username = {$quotedUsername}
             ";
-            $JobDB->exec($updateQuery);
+            if ($debug) {
+                $tu = microtime(true);
+                $JobDB->exec($updateQuery);
+                \Logger::debug('savepreferences.update', ['ms' => \Logger::timeMs($tu)]);
+                } else {
+                $JobDB->exec($updateQuery);
+                }
             } else {
             $insertQuery = "
                 INSERT INTO {$tableName}
@@ -128,7 +156,17 @@ class SavePreferences extends Widget
                     {$safeThemeMode}
                 )
             ";
-            $JobDB->exec($insertQuery);
+            if ($debug) {
+                $ti = microtime(true);
+                $JobDB->exec($insertQuery);
+                \Logger::debug('savepreferences.insert', ['ms' => \Logger::timeMs($ti)]);
+                } else {
+                $JobDB->exec($insertQuery);
+                }
+            }
+
+        if ($debug) {
+            \Logger::debug('savepreferences.result', ['user' => $username, 'action' => $exists ? 'update' : 'insert', 'total_ms' => \Logger::timeMs($t0)]);
             }
 
         return [

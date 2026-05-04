@@ -151,6 +151,11 @@ export interface LocaleConfig {
   currency: string;
 }
 
+export interface ThemeConfig {
+  primaryColor: string;
+  defaultMode: 'light' | 'dark';
+}
+
 export interface UserPreferences {
   filter?: Filters;
   column_order?: string[];
@@ -183,6 +188,7 @@ export interface AppState {
   selectedPreset: string | null;
   zoomLevel: number;
   themeMode: 'light' | 'dark';
+  theme: ThemeConfig;
   rowActions: RowAction[];
   locale: LocaleConfig;
   error: AppError | null;

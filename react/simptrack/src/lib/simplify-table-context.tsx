@@ -7,6 +7,7 @@ import type {
   FilterConfig,
   RowAction,
   LocaleConfig,
+  ThemeConfig,
   ServerColumn,
   ServerStandaloneFilter,
   AppError,
@@ -106,6 +107,7 @@ export function SimplifyTableProvider({ children }: SimplifyTableProviderProps) 
     selectedPreset: null,
     zoomLevel: 1.0,
     themeMode: 'dark',
+    theme: { primaryColor: '#ffcc00', defaultMode: 'dark' },
     rowActions: [],
     locale: { language: 'de-DE', currency: 'EUR' },
     error: null,
@@ -258,7 +260,7 @@ export function SimplifyTableProvider({ children }: SimplifyTableProviderProps) 
           spvFilter?: import('./types').SpvFilterMeta | null;
           userPreferences?: import('./types').UserPreferences | null;
           rowActions?: RowAction[];
-          theme?: { defaultMode?: 'light' | 'dark' };
+          theme?: Partial<ThemeConfig>;
           locale?: LocaleConfig;
         };
 
@@ -277,6 +279,10 @@ export function SimplifyTableProvider({ children }: SimplifyTableProviderProps) 
         const preferences = initResponse.userPreferences ?? null;
         const serverRowActions: RowAction[] = Array.isArray(initResponse.rowActions) ? initResponse.rowActions : [];
         const serverLocale: LocaleConfig = initResponse.locale ?? { language: 'de-DE', currency: 'EUR' };
+        const serverTheme: ThemeConfig = {
+          primaryColor: initResponse.theme?.primaryColor || '#ffcc00',
+          defaultMode: initResponse.theme?.defaultMode === 'light' ? 'light' : 'dark',
+        };
         const serverDefaultTheme: 'light' | 'dark' = initResponse.theme?.defaultMode === 'light' ? 'light' : 'dark';
 
         const initColumns = columnsFromServer(serverColumns);
@@ -314,6 +320,7 @@ export function SimplifyTableProvider({ children }: SimplifyTableProviderProps) 
             : defaultVisibleFilters,
           filterPresets: preferences?.filter_presets?.length ? preferences.filter_presets : prev.filterPresets,
           themeMode: preferences?.theme_mode ?? serverDefaultTheme,
+          theme: serverTheme,
           rowActions: serverRowActions,
           locale: serverLocale,
           error: null,
@@ -551,9 +558,17 @@ export function SimplifyTableProvider({ children }: SimplifyTableProviderProps) 
     url.searchParams.set('username', currentUserRef.current);
     serializeFiltersToParams(url, schemaRef.current, snapshot.filters);
 
-    const response = (await fetchJson(url.toString())) as { data?: unknown };
-    return Array.isArray(response?.data) ? (response.data as import('./types').TableRow[]) : [];
-  }, [buildEndpoint, fetchJson]);
+    try {
+      const response = (await fetchJson(url.toString())) as { data?: unknown };
+      return Array.isArray(response?.data) ? (response.data as import('./types').TableRow[]) : [];
+    } catch (err) {
+      const appErr = (err as { appError?: AppError }).appError ?? {
+        message: String((err as Error).message ?? 'Export fehlgeschlagen'),
+      };
+      setError(appErr);
+      throw err;
+    }
+  }, [buildEndpoint, fetchJson, setError]);
 
   const value = useMemo(
     () => ({

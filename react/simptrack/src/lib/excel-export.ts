@@ -44,9 +44,22 @@ function formatCellValue(value: unknown, type: string): string {
   return String(value);
 }
 
+function toXlsxRgb(hexColor: string): string {
+  const hex = hexColor.replace('#', '').trim();
+  const normalized =
+    hex.length === 3
+      ? hex
+          .split('')
+          .map((char) => char + char)
+          .join('')
+      : hex;
+  return /^[0-9a-fA-F]{6}$/.test(normalized) ? `FF${normalized.toUpperCase()}` : 'FFFFCC00';
+}
+
 // ── XLSX builder (minimal Office Open XML) ───────────────────────────
 
-function buildXlsx(columns: Column[], rows: TableRow[]): Blob {
+function buildXlsx(columns: Column[], rows: TableRow[], primaryColor = '#ffcc00'): Blob {
+  const primaryRgb = toXlsxRgb(primaryColor);
   // Filter out the actions column for export
   const exportCols = columns.filter((c) => c.type !== 'actions');
   const colCount = exportCols.length;
@@ -121,7 +134,7 @@ function buildXlsx(columns: Column[], rows: TableRow[]): Blob {
   <fills count="3">
     <fill><patternFill patternType="none"/></fill>
     <fill><patternFill patternType="gray125"/></fill>
-    <fill><patternFill patternType="solid"><fgColor rgb="FF3B82F6"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="${primaryRgb}"/></patternFill></fill>
   </fills>
   <borders count="1"><border/></borders>
   <cellStyleXfs count="1"><xf/></cellStyleXfs>
@@ -291,8 +304,8 @@ function crc32(data: Uint8Array): number {
 
 // ── Public API ───────────────────────────────────────────────────────
 
-export function exportToExcel(columns: Column[], data: TableRow[], filename?: string) {
-  const blob = buildXlsx(columns, data);
+export function exportToExcel(columns: Column[], data: TableRow[], filename?: string, primaryColor?: string) {
+  const blob = buildXlsx(columns, data, primaryColor);
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;

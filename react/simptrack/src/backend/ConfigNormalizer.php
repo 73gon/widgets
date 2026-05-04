@@ -60,6 +60,7 @@ class ConfigNormalizer
     'SPECIAL_FILTERS' => [],
     'ROW_ACTIONS' => [],
     'LAUFZEIT_RANGES' => [],
+    'EXPORT_MAX_ROWS' => null,
   ];
 
   /**

@@ -74,6 +74,7 @@ jobs:
             --exclude='*.md' \
             --exclude='logs/' \
             --exclude='cache/' \
+            --exclude='customers/' \
             --exclude='.DS_Store' \
             --exclude='Thumbs.db' \
             src/backend/ release/Simptrack/

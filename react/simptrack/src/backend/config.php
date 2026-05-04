@@ -1,7 +1,7 @@
 <?php
 /**
  * =============================================================================
- * Simptrack Widget — Generic Customer Configuration (Demo / Starter)
+ * Simptrack Widget — Customer Configuration: NAME
  * =============================================================================
  *
  * Single source of truth for all customer-specific values.
@@ -19,7 +19,6 @@
  * Every section below marked OPTIONAL has a built-in default in
  * ConfigNormalizer.php. Uncomment only what you need to override.
  *
- * Full reference: FIELD_REGISTRY_GUIDE.md
  */
 
 $CONFIG = [];
@@ -38,6 +37,12 @@ $CONFIG['DATA_VIEW'] = 'V_SIMPTRACK_DEMO';
 
 // OPTIONAL — dropdown-options cache lifetime in seconds. Default 600.
 // $CONFIG['CACHE_TTL'] = 600;
+
+// OPTIONAL — maximum rows allowed for a single Excel export. Default null (no limit).
+// Set this to prevent server overload when the data view contains many rows.
+// When the active filter would return more than this number of rows, the export
+// is blocked and the user sees an error message asking them to apply more filters.
+// $CONFIG['EXPORT_MAX_ROWS'] = 5000;
 
 // =============================================================================
 // 2. URLS & SECRETS                                                    REQUIRED
@@ -219,10 +224,31 @@ $CONFIG['SPECIAL_FILTERS'] = [
 // 12. DIAGNOSTICS                                                      OPTIONAL
 // =============================================================================
 //
-// Default LOG_DIR puts log files in <widget>/logs/. Override only if you
-// want them somewhere else.
+// Set DEBUG_LOG = true to enable extensive performance and query logging.
+// All log files are written to: <widget>/src/backend/logs/simptrack-YYYY-MM-DD.log
+// (JSON-line format, daily rotation, 14-day retention)
 //
-// $CONFIG['LOG_DIR']   = __DIR__ . '/../../logs';   // custom location
-// $CONFIG['DEBUG_LOG'] = true;                      // log every built WHERE-SQL
+// What gets logged when DEBUG_LOG = true:
+//   init.request          — request start (user, data view)
+//   init.dropdown.cache   — cache HIT (age_s, ttl_s) or MISS (source count)
+//   init.dropdown.query   — each dropdown SQL + execution time in ms
+//   init.preferences.query — user preferences SELECT + ms
+//   init.result           — total init time, column count, dropdown keys
+//
+//   query.request         — active filters, pagination params, sort
+//   query.sql             — every SQL query + execution time in ms
+//   query.result          — total rows in DB, rows returned, total ms
+//
+//   savepreferences.check  — existence-check SELECT + ms
+//   savepreferences.update — UPDATE execution time in ms
+//   savepreferences.insert — INSERT execution time in ms
+//   savepreferences.result — total time, action taken (insert/update)
+//
+//   ERROR entries are always written regardless of DEBUG_LOG.
+//
+// Disable on production once debugging is complete (default: false).
+
+// $CONFIG['DEBUG_LOG'] = true;
+// $CONFIG['LOG_DIR']   = __DIR__ . '/../../logs';   // custom log directory
 
 return $CONFIG;

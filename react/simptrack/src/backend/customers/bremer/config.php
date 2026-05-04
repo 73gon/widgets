@@ -3,15 +3,6 @@
  * =============================================================================
  * Simptrack Widget — Customer Configuration: BREMER
  * =============================================================================
- *
- * Generated from the customer's invoice/process SQL view, which joins:
- *   dbo.JRINCIDENT (JRI)  +  dbo.LASTSTEP  +  dbo.RE_KOPF
- *
- * The DATA_VIEW below should point to a SQL Server view that wraps the join
- * shown in the customer's source query (filtered by LASTSTEP.indate = MAX).
- *
- * Field IDs use simptrack's neutral naming; dbColumn values map to the
- * customer's actual columns (SQL Server is case-insensitive).
  */
 
 $CONFIG = [];
@@ -23,7 +14,7 @@ $CONFIG = [];
 $CONFIG['DB_TYPE'] = 'auto';
 
 /** Customer-specific view wrapping JRINCIDENT + LASTSTEP + RE_KOPF. */
-$CONFIG['DATA_VIEW'] = 'ER_VORGANG';
+$CONFIG['DATA_VIEW'] = 'V_SIMPTRACK';
 
 $CONFIG['PREFERENCES_TABLE'] = 'WIDGET_SIMPTRACK';
 
@@ -31,6 +22,7 @@ $CONFIG['ROW_AUTH'] = [
   'mode' => 'none',
 ];
 
+$CONFIG['EXPORT_MAX_ROWS'] = 5000;
 // =============================================================================
 // 2. URLS & SECRETS
 // =============================================================================
@@ -372,7 +364,7 @@ $CONFIG['STATUS_LABELS'] = [
 // 10. CACHE
 // =============================================================================
 
-$CONFIG['CACHE_TTL'] = 600;
+$CONFIG['CACHE_TTL'] = 21600; // 6 hours; dropdown values come from a slow reporting view.
 
 // =============================================================================
 // 11. LOCALE
@@ -394,6 +386,6 @@ $CONFIG['COMPUTED_FIELDS'] = [];
 // =============================================================================
 
 $CONFIG['LOG_DIR'] = __DIR__ . '/logs';
-$CONFIG['DEBUG_LOG'] = false;
+$CONFIG['DEBUG_LOG'] = true;
 
 return $CONFIG;

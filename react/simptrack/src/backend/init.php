@@ -82,6 +82,9 @@ class Init extends Widget
 
     private function handleRequest(): array
         {
+        $t0 = microtime(true);
+        $debug = !empty($this->config['DEBUG_LOG']);
+
         (new \ConfigValidator($this->config, $this->getJobDB()))->validate();
 
         $username = isset($_GET['username']) ? trim($_GET['username']) : '';
@@ -102,12 +105,31 @@ class Init extends Widget
             ];
             }
 
+        if ($debug) {
+            \Logger::debug('init.request', ['user' => $username, 'data_view' => $this->config['DATA_VIEW']]);
+            }
+
+        $columns = $this->getColumns();
+        $standaloneFilters = $this->getStandaloneFilters();
+        $dropdownOptions = $this->getDropdownOptions();
+        $spvFilter = $this->getSpvFilterMeta();
+        $userPreferences = $this->loadUserPreferences($username);
+
+        if ($debug) {
+            \Logger::debug('init.result', [
+                'columns' => count($columns),
+                'dropdown_keys' => array_keys($dropdownOptions),
+                'has_preferences' => $userPreferences !== null,
+                'total_ms' => \Logger::timeMs($t0),
+            ]);
+            }
+
         return [
-            'columns' => $this->getColumns(),
-            'standaloneFilters' => $this->getStandaloneFilters(),
-            'dropdownOptions' => $this->getDropdownOptions(),
-            'spvFilter' => $this->getSpvFilterMeta(),
-            'userPreferences' => $this->loadUserPreferences($username),
+            'columns' => $columns,
+            'standaloneFilters' => $standaloneFilters,
+            'dropdownOptions' => $dropdownOptions,
+            'spvFilter' => $spvFilter,
+            'userPreferences' => $userPreferences,
             'rowActions' => $rowActions,
             'theme' => $this->config['THEME'],
             'locale' => $this->config['LOCALE'],
@@ -180,37 +202,89 @@ class Init extends Widget
      */
     private function getDropdownOptions(): array
         {
+        $debug = !empty($this->config['DEBUG_LOG']);
         $cacheDir = __DIR__ . '/cache';
         $cacheFile = $cacheDir . '/dropdown_options.json';
         $cacheTtl = $this->config['CACHE_TTL'];
         $cacheSignature = $this->buildDropdownOptionsCacheSignature();
 
-        if (file_exists($cacheFile)) {
-            $age = time() - filemtime($cacheFile);
-            if ($age < $cacheTtl) {
-                $cached = json_decode(file_get_contents($cacheFile), true);
-                if (
-                    is_array($cached)
-                    && ($cached['signature'] ?? null) === $cacheSignature
-                    && isset($cached['options'])
-                    && is_array($cached['options'])
-                ) {
-                    return $cached['options'];
-                    }
-                }
+        $cachedOptions = $this->readDropdownOptionsCache($cacheFile, $cacheSignature, $cacheTtl, $debug);
+        if ($cachedOptions !== null) {
+            return $cachedOptions;
             }
 
-        $options = $this->fetchDropdownOptionsFromDB();
+        if ($debug) {
+            \Logger::debug('init.dropdown.cache', ['hit' => false, 'sources' => count($this->config['DROPDOWN_SOURCES'])]);
+            }
 
         if (!is_dir($cacheDir)) {
             @mkdir($cacheDir, 0755, true);
             }
+
+        $lockHandle = @fopen($cacheFile . '.lock', 'c');
+        if ($lockHandle) {
+            $lockStarted = microtime(true);
+            if (@flock($lockHandle, LOCK_EX)) {
+                if ($debug) {
+                    \Logger::debug('init.dropdown.cache_lock', ['wait_ms' => \Logger::timeMs($lockStarted)]);
+                    }
+
+                $cachedOptions = $this->readDropdownOptionsCache($cacheFile, $cacheSignature, $cacheTtl, $debug);
+                if ($cachedOptions !== null) {
+                    @flock($lockHandle, LOCK_UN);
+                    @fclose($lockHandle);
+                    return $cachedOptions;
+                    }
+
+                $options = $this->fetchDropdownOptionsFromDB();
+                $this->writeDropdownOptionsCache($cacheFile, $cacheSignature, $options);
+
+                @flock($lockHandle, LOCK_UN);
+                @fclose($lockHandle);
+                return $options;
+                }
+            @fclose($lockHandle);
+            }
+
+        $options = $this->fetchDropdownOptionsFromDB();
+        $this->writeDropdownOptionsCache($cacheFile, $cacheSignature, $options);
+
+        return $options;
+        }
+
+    private function readDropdownOptionsCache(string $cacheFile, string $cacheSignature, int $cacheTtl, bool $debug): ?array
+        {
+        if (!file_exists($cacheFile)) {
+            return null;
+            }
+
+        $age = time() - filemtime($cacheFile);
+        if ($age >= $cacheTtl) {
+            return null;
+            }
+
+        $cached = json_decode(file_get_contents($cacheFile), true);
+        if (
+            is_array($cached)
+            && ($cached['signature'] ?? null) === $cacheSignature
+            && isset($cached['options'])
+            && is_array($cached['options'])
+        ) {
+            if ($debug) {
+                \Logger::debug('init.dropdown.cache', ['hit' => true, 'age_s' => $age, 'ttl_s' => $cacheTtl]);
+                }
+            return $cached['options'];
+            }
+
+        return null;
+        }
+
+    private function writeDropdownOptionsCache(string $cacheFile, string $cacheSignature, array $options): void
+        {
         @file_put_contents($cacheFile, json_encode([
             'signature' => $cacheSignature,
             'options' => $options,
         ]));
-
-        return $options;
         }
 
     private function buildDropdownOptionsCacheSignature(): string
@@ -251,9 +325,31 @@ class Init extends Widget
         $spvColumn = $spv['column'] ?? null;
         $spvValue = isset($spv['value']) ? (string) $spv['value'] : null;
 
-        // DB-queried dropdowns from config
+        $groupedSources = [];
+        $singleSources = [];
         foreach ($this->config['DROPDOWN_SOURCES'] as $key => $source) {
             $table = $source['table'] === 'DATA_VIEW' ? $dataView : $source['table'];
+            if (!empty($source['distinct']) && empty($source['orderBy'])) {
+                $source['_resolvedTable'] = $table;
+                $groupedSources[$table][$key] = $source;
+                } else {
+                $source['_resolvedTable'] = $table;
+                $singleSources[$key] = $source;
+                }
+            }
+
+        foreach ($groupedSources as $table => $sources) {
+            if (count($sources) > 1) {
+                $this->fetchGroupedDropdownSources($JobDB, $table, $sources, $options, $spvOptionsKey, $spvColumn, $spvValue);
+                } else {
+                foreach ($sources as $key => $source) {
+                    $singleSources[$key] = $source;
+                    }
+                }
+            }
+
+        foreach ($singleSources as $key => $source) {
+            $table = $source['_resolvedTable'];
             $valueCol = $source['valueCol'];
             $labelCol = $source['labelCol'];
             $distinct = !empty($source['distinct']) ? 'DISTINCT' : '';
@@ -266,10 +362,21 @@ class Init extends Widget
                 }
 
             $query = "SELECT {$distinct} {$selectCols} FROM {$table} {$orderBy}";
-            $result = $JobDB->query($query);
+            if (!empty($this->config['DEBUG_LOG'])) {
+                $tq = microtime(true);
+                $result = $JobDB->query($query);
+                \Logger::debug('init.dropdown.query', ['key' => $key, 'sql' => $query, 'ms' => \Logger::timeMs($tq)]);
+                } else {
+                $result = $JobDB->query($query);
+                }
             $items = [];
             while ($row = $JobDB->fetchRow($result)) {
-                $item = ['id' => $row[$valueCol], 'label' => $row[$labelCol]];
+                $value = $row[$valueCol] ?? ($row[strtolower($valueCol)] ?? null);
+                $label = $row[$labelCol] ?? ($row[strtolower($labelCol)] ?? null);
+                if ($this->isBlank($value) || $this->isBlank($label)) {
+                    continue;
+                    }
+                $item = ['id' => $value, 'label' => $label];
                 if ($isSpvSource) {
                     $rawMarker = $row[$spvColumn] ?? ($row[strtolower($spvColumn)] ?? null);
                     if ($rawMarker !== null && (string) $rawMarker === $spvValue) {
@@ -287,6 +394,81 @@ class Init extends Widget
             }
 
         return $options;
+        }
+
+    private function fetchGroupedDropdownSources($JobDB, string $table, array $sources, array &$options, ?string $spvOptionsKey, ?string $spvColumn, ?string $spvValue): void
+        {
+        $selectColumns = [];
+        foreach ($sources as $source) {
+            $selectColumns[$source['valueCol']] = true;
+            $selectColumns[$source['labelCol']] = true;
+            }
+        if ($spvOptionsKey !== null && $spvColumn !== null && isset($sources[$spvOptionsKey])) {
+            $selectColumns[$spvColumn] = true;
+            }
+
+        $query = 'SELECT ' . implode(', ', array_keys($selectColumns)) . " FROM {$table}";
+        $started = microtime(true);
+        $result = $JobDB->query($query);
+
+        $itemsByKey = [];
+        $seenByKey = [];
+        foreach ($sources as $key => $source) {
+            $itemsByKey[$key] = [];
+            $seenByKey[$key] = [];
+            }
+
+        $rows = 0;
+        while ($row = $JobDB->fetchRow($result)) {
+            $rows++;
+            foreach ($sources as $key => $source) {
+                $value = $this->getRowValue($row, $source['valueCol']);
+                $label = $this->getRowValue($row, $source['labelCol']);
+                if ($this->isBlank($value) || $this->isBlank($label)) {
+                    continue;
+                    }
+
+                $dedupeKey = (string) $value . "\x1f" . (string) $label;
+                if (isset($seenByKey[$key][$dedupeKey])) {
+                    continue;
+                    }
+
+                $item = ['id' => $value, 'label' => $label];
+                if ($spvOptionsKey === $key && $spvColumn !== null) {
+                    $rawMarker = $this->getRowValue($row, $spvColumn);
+                    if ($rawMarker !== null && (string) $rawMarker === $spvValue) {
+                        $item['marked'] = true;
+                        }
+                    }
+
+                $seenByKey[$key][$dedupeKey] = true;
+                $itemsByKey[$key][] = $item;
+                }
+            }
+
+        foreach ($itemsByKey as $key => $items) {
+            $options[$key] = $items;
+            }
+
+        if (!empty($this->config['DEBUG_LOG'])) {
+            \Logger::debug('init.dropdown.group_query', [
+                'keys' => array_keys($sources),
+                'sql' => $query,
+                'rows' => $rows,
+                'option_counts' => array_map('count', $itemsByKey),
+                'ms' => \Logger::timeMs($started),
+            ]);
+            }
+        }
+
+    private function isBlank($value): bool
+        {
+        return $value === null || trim((string) $value) === '';
+        }
+
+    private function getRowValue(array $row, string $column)
+        {
+        return $row[$column] ?? ($row[strtolower($column)] ?? ($row[strtoupper($column)] ?? null));
         }
 
     /**
@@ -316,7 +498,13 @@ class Init extends Widget
         $safeUsername = addslashes($username);
 
         $query = "SELECT * FROM {$tableName} WHERE username = '{$safeUsername}'";
-        $result = $JobDB->query($query);
+        if (!empty($this->config['DEBUG_LOG'])) {
+            $tp = microtime(true);
+            $result = $JobDB->query($query);
+            \Logger::debug('init.preferences.query', ['sql' => $query, 'ms' => \Logger::timeMs($tp)]);
+            } else {
+            $result = $JobDB->query($query);
+            }
         $row = $JobDB->fetchRow($result);
 
         if ($row) {
