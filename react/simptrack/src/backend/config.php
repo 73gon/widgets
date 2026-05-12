@@ -139,12 +139,13 @@ $CONFIG['ROW_ACTIONS'] = [
     'popupSize' => [1000, 700],
   ],
   [
-    'id' => 'open',
-    'label' => 'Vorgang öffnen',
-    'icon' => 'eye',
+    'id' => 'invoice',
+    'label' => 'Beleg anzeigen',
+    'icon' => 'invoice',
     'enabled' => true,
-    'urlTemplate' => '{BASE_URL}/index.php?navigation=incident_show&processid={processid}&key={key}',
-    'target' => '_blank',
+    'urlTemplate' => '{BASE_URL}/FIBU_URL.php?dokument={documentNumber}',
+    'target' => 'popup',
+    'popupSize' => [1000, 800],
   ],
 ];
 
